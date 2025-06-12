@@ -78,12 +78,33 @@
     const tabElement = await waitForElement();
     tabElement.click();
 
-    // Obtenir les données du dossier directement
-    const response = await fetch(CONFIG.API_ENDPOINT);
-    if (!response.ok) throw new Error(`Erreur API: ${response.status}`);
+    // Obtenir les données du dossier directement avec gestion améliorée des erreurs
+    let dossierData;
+    try {
+      const response = await fetch(CONFIG.API_ENDPOINT, {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        },
+        mode: 'cors'
+      });
+      
+      if (!response.ok) {
+        console.error(`Erreur API: ${response.status} - ${response.statusText}`);
+        throw new Error(`Erreur API: ${response.status}`);
+      }
 
-    const dossierData = await response.json();
-    if (!dossierData?.dossier?.statut) throw new Error("Statut non trouvé");
+      dossierData = await response.json();
+      if (!dossierData?.dossier?.statut) {
+        console.error("Statut non trouvé dans les données", dossierData);
+        throw new Error("Statut non trouvé");
+      }
+    } catch (error) {
+      console.error("Erreur lors de la récupération des données:", error);
+      throw error;
+    }
 
     const data = {
       dossier: dossierData.dossier,

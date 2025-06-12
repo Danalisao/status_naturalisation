@@ -6,9 +6,12 @@ function injectScript(file_path, tag) {
   node.appendChild(script);
 }
 
+// Détection du navigateur et utilisation de l'API appropriée
+const runtime = typeof browser !== 'undefined' ? browser.runtime : chrome.runtime;
+
 // Inject local CryptoJS library
-injectScript(chrome.runtime.getURL("crypto-js.min.js"), "body");
-injectScript(chrome.runtime.getURL("forge.min.js"), "body");
+injectScript(runtime.getURL("crypto-js.min.js"), "body");
+injectScript(runtime.getURL("forge.min.js"), "body");
 
 // Inject content.js
-injectScript(chrome.runtime.getURL("content.js"), "body");
+injectScript(runtime.getURL("content.js"), "body");
