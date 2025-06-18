@@ -13,7 +13,9 @@
     "scripting",
     "activeTab",
     "webRequest",
-    "webRequestBlocking"
+    "webRequestBlocking",
+    "notifications",
+    "storage"
   ],
   "host_permissions": [
     "https://administration-etrangers-en-france.interieur.gouv.fr/*"

@@ -5,6 +5,17 @@
     API_ENDPOINT:
       "https://administration-etrangers-en-france.interieur.gouv.fr/api/anf/dossier-stepper",
     WAIT_TIME: 100,
+    STORAGE_KEY: "naturalisation_status_data",
+    HISTORY_KEY: "naturalisation_status_history",
+    HISTORY_MAX_ENTRIES: 30,
+    NOTIFICATION_ID: "status_naturalisation_notification",
+    NOTIFICATION_ICON: "icons/icon48.png",
+  };
+
+  // Stockage en mémoire pour fallback quand l'API storage n'est pas disponible
+  const memoryStorage = {
+    [CONFIG.STORAGE_KEY]: null,
+    [CONFIG.HISTORY_KEY]: [],
   };
 
   // Fonction de décryptage dédiée à Kamal : Round 2
@@ -48,6 +59,196 @@
     }
   }
 
+  // Détection du navigateur et utilisation de l'API appropriée avec vérification des capacités
+  let browserAPI;
+  if (typeof browser !== 'undefined') {
+    browserAPI = browser;
+  } else if (typeof chrome !== 'undefined') {
+    browserAPI = chrome;
+  } else {
+    console.warn('Aucune API de navigateur détectée');
+    browserAPI = {}; // Fallback pour éviter les erreurs
+  }
+  
+  // Vérification des capacités disponibles
+  const hasStorageAPI = browserAPI && browserAPI.storage && browserAPI.storage.local;
+  const hasNotificationsAPI = browserAPI && browserAPI.notifications;
+  
+  console.log('Extension API Naturalisation : APIs disponibles :', {
+    storage: hasStorageAPI ? 'oui' : 'non',
+    notifications: hasNotificationsAPI ? 'oui' : 'non'
+  });
+  
+  // Fonction pour sauvegarder les données dans le stockage local
+  async function saveToStorage(data) {
+    return new Promise((resolve) => {
+      try {
+        if (hasStorageAPI) {
+          browserAPI.storage.local.set({ [CONFIG.STORAGE_KEY]: data }, () => {
+            if (browserAPI.runtime && browserAPI.runtime.lastError) {
+              console.warn('Erreur de sauvegarde (utilisation du fallback):', browserAPI.runtime.lastError);
+              // Fallback sur stockage en mémoire
+              memoryStorage[CONFIG.STORAGE_KEY] = data;
+            }
+            console.log('Données sauvegardées');
+            resolve();
+          });
+        } else {
+          // Utilisation du stockage en mémoire
+          memoryStorage[CONFIG.STORAGE_KEY] = data;
+          console.log('Données sauvegardées en mémoire (fallback)');
+          resolve();
+        }
+      } catch (error) {
+        console.warn('Erreur lors de la sauvegarde des données (utilisation du fallback):', error);
+        // Fallback sur stockage en mémoire
+        memoryStorage[CONFIG.STORAGE_KEY] = data;
+        resolve();
+      }
+    });
+  }
+  
+  // Fonction pour récupérer les données du stockage local
+  async function getFromStorage() {
+    return new Promise((resolve) => {
+      try {
+        if (hasStorageAPI) {
+          browserAPI.storage.local.get([CONFIG.STORAGE_KEY], (result) => {
+            if (browserAPI.runtime && browserAPI.runtime.lastError) {
+              console.warn('Erreur de lecture (utilisation du fallback):', browserAPI.runtime.lastError);
+              resolve(memoryStorage[CONFIG.STORAGE_KEY]);
+            } else {
+              console.log('Données récupérées avec succès');
+              resolve(result[CONFIG.STORAGE_KEY] || null);
+            }
+          });
+        } else {
+          // Utilisation du stockage en mémoire
+          console.log('Données récupérées depuis la mémoire (fallback)');
+          resolve(memoryStorage[CONFIG.STORAGE_KEY]);
+        }
+      } catch (error) {
+        console.warn('Erreur lors de la récupération des données (utilisation du fallback):', error);
+        resolve(memoryStorage[CONFIG.STORAGE_KEY]);
+      }
+    });
+  }
+  
+  // Fonction pour récupérer l'historique des statuts
+  async function getStatusHistory() {
+    return new Promise((resolve) => {
+      try {
+        if (hasStorageAPI) {
+          browserAPI.storage.local.get([CONFIG.HISTORY_KEY], (result) => {
+            if (browserAPI.runtime && browserAPI.runtime.lastError) {
+              console.warn('Erreur de lecture de l\'historique (utilisation du fallback):', browserAPI.runtime.lastError);
+              resolve(memoryStorage[CONFIG.HISTORY_KEY] || []);
+            } else {
+              console.log('Historique récupéré avec succès');
+              resolve(result[CONFIG.HISTORY_KEY] || []);
+            }
+          });
+        } else {
+          // Utilisation du stockage en mémoire
+          console.log('Historique récupéré depuis la mémoire (fallback)');
+          resolve(memoryStorage[CONFIG.HISTORY_KEY] || []);
+        }
+      } catch (error) {
+        console.warn('Erreur lors de la récupération de l\'historique (utilisation du fallback):', error);
+        resolve(memoryStorage[CONFIG.HISTORY_KEY] || []);
+      }
+    });
+  }
+  
+  // Fonction pour ajouter une entrée à l'historique des statuts
+  async function addToStatusHistory(entry) {
+    try {
+      // Récupérer l'historique actuel
+      const history = await getStatusHistory();
+      
+      // Vérifier si une entrée similaire existe déjà (même statut et même date)
+      const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+      const duplicateEntry = history.find(item => 
+        item.statusCode === entry.statusCode && 
+        item.detectedAt.split('T')[0] === today
+      );
+      
+      if (!duplicateEntry) {
+        // Ajouter la nouvelle entrée en premier
+        history.unshift(entry);
+        
+        // Limiter le nombre d'entrées
+        if (history.length > CONFIG.HISTORY_MAX_ENTRIES) {
+          history.pop(); // Supprimer la plus ancienne entrée
+        }
+        
+        // Sauvegarder l'historique mis à jour
+        if (hasStorageAPI) {
+          browserAPI.storage.local.set({ [CONFIG.HISTORY_KEY]: history }, () => {
+            if (browserAPI.runtime && browserAPI.runtime.lastError) {
+              console.warn('Erreur lors de la sauvegarde de l\'historique (utilisation du fallback)');
+              memoryStorage[CONFIG.HISTORY_KEY] = history;
+            }
+          });
+        } else {
+          // Fallback sur stockage en mémoire
+          memoryStorage[CONFIG.HISTORY_KEY] = history;
+        }
+        console.log('Entrée ajoutée à l\'historique avec succès');
+      } else {
+        console.log('Entrée déjà présente dans l\'historique, ignorée');
+      }
+    } catch (error) {
+      console.warn('Erreur lors de l\'ajout à l\'historique (utilisation du fallback):', error);
+      // En cas d'erreur, essayer d'utiliser le stockage en mémoire
+      try {
+        const history = memoryStorage[CONFIG.HISTORY_KEY] || [];
+        history.unshift(entry);
+        if (history.length > CONFIG.HISTORY_MAX_ENTRIES) {
+          history.pop();
+        }
+        memoryStorage[CONFIG.HISTORY_KEY] = history;
+      } catch (fallbackError) {
+        console.error('Échec total de l\'ajout à l\'historique:', fallbackError);
+      }
+    }
+  }
+  
+  // Fonction pour afficher une notification
+  async function showNotification(title, message) {
+    try {
+      if (!hasNotificationsAPI) {
+        console.warn('API de notifications non disponible');
+        return;
+      }
+      
+      // Vérifie si la permission de notification est accordée
+      if (browserAPI.permissions && browserAPI.permissions.contains) {
+        const permission = await browserAPI.permissions.contains({ permissions: ['notifications'] });
+        if (!permission) {
+          console.warn('Permission de notification non accordée');
+          return;
+        }
+      }
+      
+      // Déterminer l'URL de l'icône (chemin relatif à l'extension)
+      let iconUrl = 'icon128.png'; // Valeur par défaut
+      if (browserAPI.runtime && browserAPI.runtime.getURL) {
+        iconUrl = browserAPI.runtime.getURL(CONFIG.NOTIFICATION_ICON);
+      }
+      
+      // Créer la notification
+      browserAPI.notifications.create(CONFIG.NOTIFICATION_ID, {
+        type: 'basic',
+        iconUrl: iconUrl,
+        title: title,
+        message: message
+      });
+    } catch (error) {
+      console.warn('Erreur lors de l\'affichage de la notification:', error);
+    }
+  }
+  
   if (!window.location.href.includes(CONFIG.URL_PATTERN)) return;
 
   try {
@@ -206,6 +407,61 @@
     console.log(
       "Extension API Naturalisation  : Statut description = " + dossierStatus
     );
+    
+    // Récupérer les données précédentes pour comparer
+    try {
+      const previousData = await getFromStorage();
+      
+      // Créer un objet avec les données actuelles à sauvegarder
+      const currentData = {
+        statusCode: dossierStatusCode,
+        status: dossierStatus,
+        date: data?.dossier?.date_statut,
+        lastChecked: new Date().toISOString()
+      };
+      
+      // Créer une entrée pour l'historique (similaire mais avec timestamp de détection)
+      const historyEntry = {
+        ...currentData,
+        detectedAt: new Date().toISOString(),
+      };
+      
+      // Vérifier s'il y a un changement de statut
+      if (previousData && previousData.statusCode !== dossierStatusCode) {
+        // Afficher une notification de changement de statut
+        await showNotification(
+          "Changement de statut de naturalisation",
+          `Nouveau statut: ${dossierStatus}\nAncien statut: ${previousData.status || 'Non disponible'}`
+        );
+        console.log("Extension API Naturalisation : Notification envoyée pour changement de statut");
+        
+        // Ajouter l'entrée à l'historique avec information sur le statut précédent
+        historyEntry.previousStatus = previousData.status;
+        historyEntry.previousStatusCode = previousData.statusCode;
+        await addToStatusHistory(historyEntry);
+      } else if (!previousData) {
+        // Première utilisation, afficher un message de bienvenue
+        await showNotification(
+          "Statut de naturalisation détecté",
+          `Statut actuel: ${dossierStatus}`
+        );
+        console.log("Extension API Naturalisation : Première détection de statut");
+        
+        // Ajouter la première entrée à l'historique
+        await addToStatusHistory(historyEntry);
+      } else {
+        // Même statut, mais mettons à jour la date de vérification dans l'historique
+        // pour garder une trace des consultations sans changement d'état
+        historyEntry.noChange = true;
+        await addToStatusHistory(historyEntry);
+      }
+      
+      // Sauvegarder les données actuelles pour comparaison future
+      await saveToStorage(currentData);
+      
+    } catch (error) {
+      console.error("Erreur lors de la gestion des notifications et de l'historique:", error);
+    }
 
     // Fonction pour calculer le nombre de jours écoulés
     function daysAgo(dateString) {
@@ -251,6 +507,55 @@
     const dynamicClass = activeStep
       .getAttributeNames()
       .find((name) => name.startsWith("_ngcontent-"));
+      
+    // Fonction pour formatter une date
+    function formatDate(dateString) {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('fr-FR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    }
+    
+    // Fonction pour générer le code HTML de l'historique
+    async function generateHistoryHtml() {
+      try {
+        const history = await getStatusHistory();
+        if (!history || history.length === 0) {
+          return '<div class="history-item">Aucun historique disponible</div>';
+        }
+        
+        let historyHtml = '';
+        history.forEach((entry, index) => {
+          if (entry.noChange) {
+            // C'est juste une vérification sans changement, on peut l'ignorer pour l'affichage
+            return;
+          }
+          
+          const date = formatDate(entry.detectedAt);
+          let itemHtml = `
+            <div class="history-item" style="padding: 10px; border-bottom: 1px solid #e0e0e0; margin-bottom: 10px;">
+              <div style="font-weight: bold; color: #255a99;">${entry.status}</div>
+              <div style="font-size: 0.9em; color: #666;">Détecté le ${date}</div>
+          `;
+          
+          if (entry.previousStatus) {
+            itemHtml += `<div style="font-size: 0.9em; margin-top: 5px; font-style: italic;">Précédent: ${entry.previousStatus}</div>`;
+          }
+          
+          itemHtml += '</div>';
+          historyHtml += itemHtml;
+        });
+        
+        return historyHtml;
+      } catch (error) {
+        console.error("Erreur lors de la génération de l'historique:", error);
+        return '<div class="history-item">Erreur lors du chargement de l\'historique</div>';
+      }
+    }
 
     // Création du nouvel élément avec le style et le format spécifiés
     const newElement = document.createElement("li");
@@ -269,18 +574,33 @@
       font-family: Arial, sans-serif;
       font-size: 18px;
       color: #080000;
+      flex-wrap: wrap;
+      cursor: pointer;
     `
     );
     newElement.innerHTML = `
-      <div ${dynamicClass} class="itemFriseContent">
-        <span ${dynamicClass} class="itemFriseIcon">
-          <span ${dynamicClass} aria-hidden="true" class="fa fa-hourglass-start" style="color:  #bf2626!important;"></span>
-        </span>
-        <p ${dynamicClass}>
-          ${dossierStatus} <span style="color: #bf2626;">(${daysAgo(
+      <div ${dynamicClass} class="itemFriseContent" style="width: 100%;">
+        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+          <span ${dynamicClass} class="itemFriseIcon">
+            <span ${dynamicClass} aria-hidden="true" class="fa fa-hourglass-start" style="color: #bf2626!important;"></span>
+          </span>
+          <p ${dynamicClass} style="flex-grow: 1;">
+            ${dossierStatus} <span style="color: #bf2626;">(${daysAgo(
       data?.dossier?.date_statut
     )})</span>
-        </p>
+          </p>
+          <span id="toggle-history-btn" style="cursor: pointer; padding: 5px 10px; background: #255a99; color: white; border-radius: 4px; margin-left: 15px; font-size: 14px;">
+            Historique
+          </span>
+        </div>
+        <div id="status-history-container" style="display: none; width: 100%; margin-top: 15px; max-height: 300px; overflow-y: auto; padding: 10px; background-color: #f8f9fa; border-radius: 5px; border: 1px solid #dee2e6;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <h3 style="margin: 0; color: #255a99;">Historique des statuts</h3>
+          </div>
+          <div id="history-items-container" style="overflow-y: auto;">
+            <div style="text-align: center; padding: 20px;">Chargement de l'historique...</div>
+          </div>
+        </div>
       </div>
     `;
 
@@ -288,6 +608,35 @@
     console.log(
       "Extension API Naturalisation  : Nouvel élément inséré avec le statut du dossier"
     );
+    
+    // Ajouter la logique pour afficher/masquer l'historique
+    setTimeout(async () => {
+      const toggleBtn = document.getElementById('toggle-history-btn');
+      const historyContainer = document.getElementById('status-history-container');
+      const historyItemsContainer = document.getElementById('history-items-container');
+      
+      if (toggleBtn && historyContainer && historyItemsContainer) {
+        toggleBtn.addEventListener('click', async function() {
+          if (historyContainer.style.display === 'none') {
+            historyContainer.style.display = 'block';
+            toggleBtn.textContent = 'Masquer';
+            toggleBtn.style.background = '#bf2626';
+            
+            // Charger l'historique à la demande
+            historyItemsContainer.innerHTML = await generateHistoryHtml();
+          } else {
+            historyContainer.style.display = 'none';
+            toggleBtn.textContent = 'Historique';
+            toggleBtn.style.background = '#255a99';
+          }
+        });
+        
+        // Précharger l'historique après un court délai
+        setTimeout(async () => {
+          historyItemsContainer.innerHTML = await generateHistoryHtml();
+        }, 1000);
+      }
+    }, 500);
   } catch (error) {
     console.log(
       "Extension API Naturalisation : Erreur d'initialisation:",
