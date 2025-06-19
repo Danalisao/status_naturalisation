@@ -1,4 +1,61 @@
+/**
+ * content.js - Script principal de l'extension Statut Naturalisation
+ * Implémente l'interface utilisateur moderne avec design glassmorphism, timeline interactive,
+ * et utilise les modules utilitaires pour la gestion du stockage et des notifications.
+ */
 (async function () {
+  // Utiliser les modules d'utilitaires si disponibles, sinon créer des objets de remplacement
+  const utils = typeof NaturalisationUtils !== 'undefined' ? 
+    NaturalisationUtils : {
+      CONFIG: {},
+      detectBrowser: () => null,
+      storage: {
+        save: async () => null,
+        get: async () => null
+      },
+      notifications: {
+        show: async () => null
+      },
+      cache: {
+        set: async () => null,
+        get: async () => null,
+        clear: async () => null
+      },
+      dateUtils: {
+        timeAgo: () => '',
+        formatDate: () => ''
+      },
+      statusUtils: {
+        getStatusIcon: () => '❓',
+        getStatusClass: () => ''
+      }
+    };
+  
+  const debug = typeof NaturalisationDebug !== 'undefined' ? 
+    NaturalisationDebug : {
+      isDebugEnabled: () => false,
+      setDebugMode: () => null,
+      error: console.error,
+      warn: console.warn,
+      info: console.info,
+      debug: console.debug,
+      trace: console.trace,
+      startTimer: () => null,
+      endTimer: () => 0,
+      logEnvironment: () => null,
+      logModulesStatus: () => null,
+      captureError: (e) => console.error(e)
+    };
+
+  // Initialiser le module de debug
+  debug.setDebugMode(true);
+  debug.logEnvironment();
+  debug.logModulesStatus({
+    utils: typeof NaturalisationUtils !== 'undefined',
+    debug: typeof NaturalisationDebug !== 'undefined'
+  });
+
+  // Configuration de l'extension
   const CONFIG = {
     URL_PATTERN: "administration-etrangers-en-france",
     TAB_NAME: "Demande d'accès à la Nationalité Française",
@@ -10,9 +67,17 @@
     HISTORY_MAX_ENTRIES: 30,
     NOTIFICATION_ID: "status_naturalisation_notification",
     NOTIFICATION_ICON: "icons/icon48.png",
+    CACHE_DURATION: 30 * 60 * 1000, // 30 minutes
+    DEBUG_MODE: true,
+    UI: {
+      CONTAINER_ID: "naturalisation-status-container",
+      TIMELINE_ID: "naturalisation-timeline",
+      THEME_DARK_CLASS: "naturalisation-dark-mode",
+      ANIMATION_DELAY: 100
+    }
   };
-
-  // Stockage en mémoire pour fallback quand l'API storage n'est pas disponible
+  
+  // Stockage en mémoire pour fallback quand les APIs storage ne sont pas disponibles
   const memoryStorage = {
     [CONFIG.STORAGE_KEY]: null,
     [CONFIG.HISTORY_KEY]: [],
@@ -59,110 +124,63 @@
     }
   }
 
-  // Détection du navigateur et utilisation de l'API appropriée avec vérification des capacités
-  let browserAPI;
-  if (typeof browser !== 'undefined') {
-    browserAPI = browser;
-  } else if (typeof chrome !== 'undefined') {
-    browserAPI = chrome;
-  } else {
-    console.warn('Aucune API de navigateur détectée');
-    browserAPI = {}; // Fallback pour éviter les erreurs
-  }
+  /**
+   * Détection des capacités du navigateur
+   */
+  debug.info('Initialisation du module de détection de navigateur');
+  const browser = utils.detectBrowser();
+  debug.info(`Navigateur détecté: ${browser ? browser.name : 'Inconnu'}`);
   
-  // Vérification des capacités disponibles
-  const hasStorageAPI = browserAPI && browserAPI.storage && browserAPI.storage.local;
-  const hasNotificationsAPI = browserAPI && browserAPI.notifications;
+  /**
+   * Fonctions de wrapper vers les modules utilitaires
+   */
   
-  console.log('Extension API Naturalisation : APIs disponibles :', {
-    storage: hasStorageAPI ? 'oui' : 'non',
-    notifications: hasNotificationsAPI ? 'oui' : 'non'
-  });
-  
-  // Fonction pour sauvegarder les données dans le stockage local
+  // Fonction pour sauvegarder les données
   async function saveToStorage(data) {
-    return new Promise((resolve) => {
-      try {
-        if (hasStorageAPI) {
-          browserAPI.storage.local.set({ [CONFIG.STORAGE_KEY]: data }, () => {
-            if (browserAPI.runtime && browserAPI.runtime.lastError) {
-              console.warn('Erreur de sauvegarde (utilisation du fallback):', browserAPI.runtime.lastError);
-              // Fallback sur stockage en mémoire
-              memoryStorage[CONFIG.STORAGE_KEY] = data;
-            }
-            console.log('Données sauvegardées');
-            resolve();
-          });
-        } else {
-          // Utilisation du stockage en mémoire
-          memoryStorage[CONFIG.STORAGE_KEY] = data;
-          console.log('Données sauvegardées en mémoire (fallback)');
-          resolve();
-        }
-      } catch (error) {
-        console.warn('Erreur lors de la sauvegarde des données (utilisation du fallback):', error);
-        // Fallback sur stockage en mémoire
-        memoryStorage[CONFIG.STORAGE_KEY] = data;
-        resolve();
-      }
-    });
+    try {
+      debug.startTimer('saveToStorage');
+      await utils.storage.save(CONFIG.STORAGE_KEY, data);
+      debug.info('Données sauvegardées avec succès');
+      debug.endTimer('saveToStorage');
+      return true;
+    } catch (error) {
+      debug.error('Erreur lors de la sauvegarde des données', error);
+      return false;
+    }
   }
   
-  // Fonction pour récupérer les données du stockage local
+  // Fonction pour récupérer les données
   async function getFromStorage() {
-    return new Promise((resolve) => {
-      try {
-        if (hasStorageAPI) {
-          browserAPI.storage.local.get([CONFIG.STORAGE_KEY], (result) => {
-            if (browserAPI.runtime && browserAPI.runtime.lastError) {
-              console.warn('Erreur de lecture (utilisation du fallback):', browserAPI.runtime.lastError);
-              resolve(memoryStorage[CONFIG.STORAGE_KEY]);
-            } else {
-              console.log('Données récupérées avec succès');
-              resolve(result[CONFIG.STORAGE_KEY] || null);
-            }
-          });
-        } else {
-          // Utilisation du stockage en mémoire
-          console.log('Données récupérées depuis la mémoire (fallback)');
-          resolve(memoryStorage[CONFIG.STORAGE_KEY]);
-        }
-      } catch (error) {
-        console.warn('Erreur lors de la récupération des données (utilisation du fallback):', error);
-        resolve(memoryStorage[CONFIG.STORAGE_KEY]);
-      }
-    });
+    try {
+      debug.startTimer('getFromStorage');
+      const data = await utils.storage.get(CONFIG.STORAGE_KEY);
+      debug.info('Données récupérées avec succès');
+      debug.endTimer('getFromStorage');
+      return data;
+    } catch (error) {
+      debug.error('Erreur lors de la récupération des données', error);
+      return null;
+    }
   }
   
   // Fonction pour récupérer l'historique des statuts
   async function getStatusHistory() {
-    return new Promise((resolve) => {
-      try {
-        if (hasStorageAPI) {
-          browserAPI.storage.local.get([CONFIG.HISTORY_KEY], (result) => {
-            if (browserAPI.runtime && browserAPI.runtime.lastError) {
-              console.warn('Erreur de lecture de l\'historique (utilisation du fallback):', browserAPI.runtime.lastError);
-              resolve(memoryStorage[CONFIG.HISTORY_KEY] || []);
-            } else {
-              console.log('Historique récupéré avec succès');
-              resolve(result[CONFIG.HISTORY_KEY] || []);
-            }
-          });
-        } else {
-          // Utilisation du stockage en mémoire
-          console.log('Historique récupéré depuis la mémoire (fallback)');
-          resolve(memoryStorage[CONFIG.HISTORY_KEY] || []);
-        }
-      } catch (error) {
-        console.warn('Erreur lors de la récupération de l\'historique (utilisation du fallback):', error);
-        resolve(memoryStorage[CONFIG.HISTORY_KEY] || []);
-      }
-    });
+    try {
+      debug.startTimer('getStatusHistory');
+      const history = await utils.storage.get(CONFIG.HISTORY_KEY) || [];
+      debug.info('Historique récupéré avec succès', { entriesCount: history.length });
+      debug.endTimer('getStatusHistory');
+      return history;
+    } catch (error) {
+      debug.error('Erreur lors de la récupération de l\'historique', error);
+      return [];
+    }
   }
   
   // Fonction pour ajouter une entrée à l'historique des statuts
   async function addToStatusHistory(entry) {
     try {
+      debug.startTimer('addToStatusHistory');
       // Récupérer l'historique actuel
       const history = await getStatusHistory();
       
@@ -183,69 +201,41 @@
         }
         
         // Sauvegarder l'historique mis à jour
-        if (hasStorageAPI) {
-          browserAPI.storage.local.set({ [CONFIG.HISTORY_KEY]: history }, () => {
-            if (browserAPI.runtime && browserAPI.runtime.lastError) {
-              console.warn('Erreur lors de la sauvegarde de l\'historique (utilisation du fallback)');
-              memoryStorage[CONFIG.HISTORY_KEY] = history;
-            }
-          });
-        } else {
-          // Fallback sur stockage en mémoire
-          memoryStorage[CONFIG.HISTORY_KEY] = history;
-        }
-        console.log('Entrée ajoutée à l\'historique avec succès');
+        await utils.storage.save(CONFIG.HISTORY_KEY, history);
+        debug.info('Entrée ajoutée à l\'historique avec succès');
       } else {
-        console.log('Entrée déjà présente dans l\'historique, ignorée');
+        debug.info('Entrée déjà présente dans l\'historique, ignorée');
       }
+      
+      debug.endTimer('addToStatusHistory');
+      return true;
     } catch (error) {
-      console.warn('Erreur lors de l\'ajout à l\'historique (utilisation du fallback):', error);
-      // En cas d'erreur, essayer d'utiliser le stockage en mémoire
-      try {
-        const history = memoryStorage[CONFIG.HISTORY_KEY] || [];
-        history.unshift(entry);
-        if (history.length > CONFIG.HISTORY_MAX_ENTRIES) {
-          history.pop();
-        }
-        memoryStorage[CONFIG.HISTORY_KEY] = history;
-      } catch (fallbackError) {
-        console.error('Échec total de l\'ajout à l\'historique:', fallbackError);
-      }
+      debug.error('Erreur lors de l\'ajout à l\'historique', error);
+      return false;
     }
   }
   
   // Fonction pour afficher une notification
-  async function showNotification(title, message) {
+  async function showNotification(title, message, type = 'info') {
     try {
-      if (!hasNotificationsAPI) {
-        console.warn('API de notifications non disponible');
-        return;
-      }
+      debug.startTimer('showNotification');
       
-      // Vérifie si la permission de notification est accordée
-      if (browserAPI.permissions && browserAPI.permissions.contains) {
-        const permission = await browserAPI.permissions.contains({ permissions: ['notifications'] });
-        if (!permission) {
-          console.warn('Permission de notification non accordée');
-          return;
-        }
-      }
-      
-      // Déterminer l'URL de l'icône (chemin relatif à l'extension)
-      let iconUrl = 'icon128.png'; // Valeur par défaut
-      if (browserAPI.runtime && browserAPI.runtime.getURL) {
-        iconUrl = browserAPI.runtime.getURL(CONFIG.NOTIFICATION_ICON);
-      }
-      
-      // Créer la notification
-      browserAPI.notifications.create(CONFIG.NOTIFICATION_ID, {
-        type: 'basic',
-        iconUrl: iconUrl,
+      // Utiliser le module d'utilitaires pour les notifications avec gestion des fallbacks
+      await utils.notifications.show({
+        id: CONFIG.NOTIFICATION_ID,
+        type: type,
         title: title,
-        message: message
+        message: message,
+        icon: CONFIG.NOTIFICATION_ICON,
+        duration: 5000
       });
+      
+      debug.info('Notification affichée avec succès');
+      debug.endTimer('showNotification');
+      return true;
     } catch (error) {
-      console.warn('Erreur lors de l\'affichage de la notification:', error);
+      debug.error('Erreur lors de l\'affichage de la notification', error);
+      return false;
     }
   }
   
@@ -463,41 +453,9 @@
       console.error("Erreur lors de la gestion des notifications et de l'historique:", error);
     }
 
-    // Fonction pour calculer le nombre de jours écoulés
+    // Utiliser la fonction de calcul du temps écoulé du module d'utilitaires
     function daysAgo(dateString) {
-      const inputDate = new Date(dateString);
-      const currentDate = new Date();
-      const diffInDays = Math.floor(
-        (currentDate - inputDate) / (1000 * 60 * 60 * 24)
-      );
-
-      if (diffInDays === 0) return "Aujourd'hui";
-      if (diffInDays === 1) return "il y a 1 jr";
-      if (diffInDays <= 30) return `il y a ${diffInDays} jrs`;
-
-      const years = Math.floor(diffInDays / 365);
-      const months = Math.floor((diffInDays % 365) / 30);
-      const days = diffInDays % 30;
-
-      if (years >= 1) {
-        if (months === 0) {
-          return `il y a ${years} ${years === 1 ? "an" : "ans"}`;
-        }
-        return `il y a ${years} ${
-          years === 1 ? "an" : "ans"
-        } et ${months} mois`;
-      }
-
-      if (months >= 1) {
-        if (days === 0) {
-          return `il y a ${months} ${months === 1 ? "mois" : "mois"}`;
-        }
-        return `il y a ${months} ${
-          months === 1 ? "mois" : "mois"
-        } et ${days} jrs`;
-      }
-
-      return `il y a ${months} mois`;
+      return utils.dateUtils.timeAgo(dateString);
     }
 
     // Attendre l'élément actif au lieu de lancer une erreur s'il n'est pas trouvé
@@ -520,89 +478,610 @@
       });
     }
     
-    // Fonction pour générer le code HTML de l'historique
-    async function generateHistoryHtml() {
+    // Fonction pour créer les éléments DOM de l'historique de manière sécurisée
+    async function generateHistoryElements(container) {
       try {
+        debug.startTimer('generateHistoryElements');
         const history = await getStatusHistory();
+        
+        // Nettoyer le container
+        container.innerHTML = '';
+        
         if (!history || history.length === 0) {
-          return '<div class="history-item">Aucun historique disponible</div>';
+          debug.info('Aucun historique disponible');
+          const emptyDiv = document.createElement('div');
+          emptyDiv.className = 'timeline-item empty';
+          emptyDiv.textContent = 'Aucun historique disponible';
+          container.appendChild(emptyDiv);
+          return;
         }
         
-        let historyHtml = '';
-        history.forEach((entry, index) => {
-          if (entry.noChange) {
-            // C'est juste une vérification sans changement, on peut l'ignorer pour l'affichage
-            return;
-          }
+        // Filtre les entrées sans changement et compte le nombre d'entrées importantes
+        const importantEntries = history.filter(entry => !entry.noChange);
+        const counterElement = document.getElementById('timeline-counter');
+        if (counterElement) {
+          counterElement.textContent = `${importantEntries.length} ${importantEntries.length > 1 ? 'étapes' : 'étape'}`;
+        }
+        
+        // Parcourir l'historique filtré pour générer la timeline
+        importantEntries.forEach((entry, index) => {
+          // Déterminer l'icône et la classe CSS pour le statut
+          const statusIcon = utils.statusUtils.getStatusIcon(entry.statusCode.toLowerCase()) || '⏳';
+          const statusClass = utils.statusUtils.getStatusClass(entry.statusCode.toLowerCase()) || '';
           
+          // Formater les dates
           const date = formatDate(entry.detectedAt);
-          let itemHtml = `
-            <div class="history-item" style="padding: 10px; border-bottom: 1px solid #e0e0e0; margin-bottom: 10px;">
-              <div style="font-weight: bold; color: #255a99;">${entry.status}</div>
-              <div style="font-size: 0.9em; color: #666;">Détecté le ${date}</div>
-          `;
+          const timeAgo = daysAgo(entry.date);
           
+          // Déterminer si c'est le dernier item pour le style
+          const isLast = index === 0;
+          const isFirst = index === importantEntries.length - 1;
+          
+          // Créer l'élément principal
+          const timelineItem = document.createElement('div');
+          timelineItem.className = `timeline-item ${isLast ? 'latest' : ''} ${isFirst ? 'first' : ''}`;
+          
+          // Style spécifique pour le dernier élément (le plus récent)
+          const itemStyle = isLast ? 'border-left: 2px solid #5d9cec;' : '';
+          const iconBgColor = isLast ? '#5d9cec' : 'rgba(150,150,150,0.3)';
+          const iconColor = isLast ? 'white' : '#999';
+          
+          timelineItem.style.cssText = `position: relative; margin-bottom: 20px; padding-bottom: 16px; ${itemStyle}`;
+          
+          // Créer le point de la timeline
+          const timelinePoint = document.createElement('div');
+          timelinePoint.className = 'timeline-point';
+          timelinePoint.style.cssText = `position: absolute; left: -44px; width: 32px; height: 32px; 
+               border-radius: 50%; background-color: ${iconBgColor}; color: ${iconColor}; display: flex; align-items: center; justify-content: center; 
+               box-shadow: 0 4px 12px rgba(0,0,0,${prefersDarkMode ? '0.3' : '0.15'}), 0 0 0 3px ${prefersDarkMode ? 'rgba(20,25,40,0.8)' : 'rgba(255,255,255,0.9)'}; 
+               border: 2px solid ${isLast ? (prefersDarkMode ? '#5d9cec' : '#3b82f6') : (prefersDarkMode ? '#444' : '#e2e8f0')}; z-index: 2;`;
+          
+          const iconSpan = document.createElement('span');
+          iconSpan.className = statusClass;
+          iconSpan.style.cssText = 'font-size: 15px; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.3));';
+          iconSpan.textContent = statusIcon;
+          timelinePoint.appendChild(iconSpan);
+          
+          // Créer le contenu de la timeline
+          const timelineContent = document.createElement('div');
+          timelineContent.className = 'timeline-content';
+          timelineContent.style.cssText = `background: ${prefersDarkMode ? 
+            'linear-gradient(135deg, rgba(30, 35, 50, 0.95) 0%, rgba(40, 45, 65, 0.95) 100%)' : 
+            'linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.98) 100%)'}; 
+               backdrop-filter: blur(12px); border-radius: 12px; padding: 18px; margin-left: 8px;
+               box-shadow: 0 3px 16px rgba(0,0,0,${prefersDarkMode ? '0.2' : '0.06'}), 
+                          0 1px 2px rgba(0,0,0,${prefersDarkMode ? '0.1' : '0.03'}); 
+               border: 1px solid ${prefersDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)'};
+               position: relative;`;
+          
+          // Créer l'en-tête
+          const timelineHeader = document.createElement('div');
+          timelineHeader.className = 'timeline-header';
+          timelineHeader.style.cssText = `display: flex; justify-content: space-between; align-items: flex-start; 
+                margin-bottom: 12px; border-bottom: 1px solid ${prefersDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)'}; 
+                padding-bottom: 10px;`;
+          
+          const titleH4 = document.createElement('h4');
+          titleH4.style.cssText = `margin: 0; color: ${prefersDarkMode ? '#ffffff' : '#1e293b'}; font-size: 15px; 
+                font-weight: 600; text-shadow: ${prefersDarkMode ? '0 1px 2px rgba(0,0,0,0.5)' : '0 1px 2px rgba(255,255,255,0.8)'}; 
+                line-height: 1.4; flex: 1; min-width: 0; word-wrap: break-word; letter-spacing: 0.2px;
+                font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;`;
+          titleH4.textContent = entry.status;
+          
+          const timeBadge = document.createElement('span');
+          timeBadge.className = 'timeline-time-badge';
+          timeBadge.style.cssText = `font-size: 11px; padding: 5px 12px; 
+                background: ${prefersDarkMode ? 
+                  'linear-gradient(135deg, rgba(59, 130, 246, 0.25) 0%, rgba(99, 139, 218, 0.25) 100%)' : 
+                  'linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(99, 139, 218, 0.1) 100%)'}; 
+                color: ${prefersDarkMode ? '#79b9ff' : '#1a5099'}; border-radius: 12px; font-weight: 600;
+                border: 1px solid ${prefersDarkMode ? 'rgba(59, 130, 246, 0.3)' : 'rgba(59, 130, 246, 0.2)'};
+                white-space: nowrap; margin-left: 12px; flex-shrink: 0;
+                text-shadow: ${prefersDarkMode ? '0 1px 2px rgba(0,0,0,0.3)' : '0 1px 2px rgba(255,255,255,0.8)'};
+                box-shadow: 0 2px 6px rgba(59, 130, 246, ${prefersDarkMode ? '0.15' : '0.08'});`;
+          timeBadge.textContent = timeAgo;
+          
+          timelineHeader.appendChild(titleH4);
+          timelineHeader.appendChild(timeBadge);
+          
+          // Créer la date
+          const timelineDate = document.createElement('div');
+          timelineDate.className = 'timeline-date';
+          timelineDate.style.cssText = `font-size: 12px; color: ${prefersDarkMode ? '#94a3b8' : '#64748b'}; 
+                margin-bottom: 6px; display: flex; align-items: center; font-weight: 500;`;
+          
+          const dateIcon = document.createElement('span');
+          dateIcon.style.cssText = 'margin-right: 6px; opacity: 0.8; font-size: 11px;';
+          dateIcon.textContent = '📅';
+          
+          const dateText = document.createElement('span');
+          dateText.textContent = `Détecté le ${date}`;
+          
+          timelineDate.appendChild(dateIcon);
+          timelineDate.appendChild(dateText);
+          
+          // Assembler le contenu
+          timelineContent.appendChild(timelineHeader);
+          timelineContent.appendChild(timelineDate);
+          
+          // Ajouter l'information sur le statut précédent si disponible
           if (entry.previousStatus) {
-            itemHtml += `<div style="font-size: 0.9em; margin-top: 5px; font-style: italic;">Précédent: ${entry.previousStatus}</div>`;
+            const prevIcon = entry.previousStatusCode ? 
+              utils.statusUtils.getStatusIcon(entry.previousStatusCode.toLowerCase()) : '🗓️';
+            
+            const timelinePrevious = document.createElement('div');
+            timelinePrevious.className = 'timeline-previous';
+            timelinePrevious.style.cssText = `font-size: 12px; margin-top: 12px; padding: 12px; 
+                 background: ${prefersDarkMode ? 
+                   'linear-gradient(135deg, rgba(20, 25, 35, 0.8) 0%, rgba(30, 35, 45, 0.8) 100%)' : 
+                   'linear-gradient(135deg, rgba(248, 250, 252, 0.9) 0%, rgba(241, 245, 249, 0.9) 100%)'}; 
+                 border-radius: 12px; 
+                 border-left: 3px solid ${prefersDarkMode ? 'rgba(156, 163, 175, 0.3)' : 'rgba(156, 163, 175, 0.4)'};
+                 box-shadow: 0 2px 8px rgba(0,0,0,${prefersDarkMode ? '0.15' : '0.04'}),
+                            inset 0 1px 0 rgba(255,255,255,${prefersDarkMode ? '0.05' : '0.7'});
+                 border: 1px solid ${prefersDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)'};
+                 backdrop-filter: blur(6px);`;
+            
+            const prevHeader = document.createElement('div');
+            prevHeader.style.cssText = 'display: flex; align-items: center; margin-bottom: 6px;';
+            
+            const prevIconSpan = document.createElement('span');
+            prevIconSpan.style.cssText = 'display: inline-block; margin-right: 6px; opacity: 0.8; font-size: 12px; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.2));';
+            prevIconSpan.textContent = prevIcon;
+            
+            const prevLabel = document.createElement('span');
+            prevLabel.style.cssText = `font-weight: 600; color: ${prefersDarkMode ? '#9ca3af' : '#6b7280'}; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;`;
+            prevLabel.textContent = 'Statut précédent';
+            
+            const prevStatusDiv = document.createElement('div');
+            prevStatusDiv.style.cssText = `display: block; margin-top: 6px; padding-left: 18px; 
+                 color: ${prefersDarkMode ? '#d1d5db' : '#374151'}; font-weight: 500; font-size: 12px;
+                 line-height: 1.4; word-wrap: break-word;`;
+            prevStatusDiv.textContent = entry.previousStatus;
+            
+            prevHeader.appendChild(prevIconSpan);
+            prevHeader.appendChild(prevLabel);
+            timelinePrevious.appendChild(prevHeader);
+            timelinePrevious.appendChild(prevStatusDiv);
+            timelineContent.appendChild(timelinePrevious);
           }
           
-          itemHtml += '</div>';
-          historyHtml += itemHtml;
+          // Assembler tout
+          timelineItem.appendChild(timelinePoint);
+          timelineItem.appendChild(timelineContent);
+          container.appendChild(timelineItem);
         });
         
-        return historyHtml;
+        debug.endTimer('generateHistoryElements');
       } catch (error) {
-        console.error("Erreur lors de la génération de l'historique:", error);
-        return '<div class="history-item">Erreur lors du chargement de l\'historique</div>';
+        debug.error("Erreur lors de la génération de l'historique", error);
+        container.innerHTML = '';
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'timeline-item error';
+        errorDiv.style.cssText = 'padding: 15px; background: rgba(220,53,69,0.1); border-radius: 8px; color: #dc3545;';
+        
+        const errorIcon = document.createElement('span');
+        errorIcon.style.cssText = 'font-size: 16px; margin-right: 8px;';
+        errorIcon.textContent = '⚠';
+        
+        const errorText = document.createTextNode(' Erreur lors du chargement de l\'historique');
+        
+        errorDiv.appendChild(errorIcon);
+        errorDiv.appendChild(errorText);
+        container.appendChild(errorDiv);
       }
     }
 
-    // Création du nouvel élément avec le style et le format spécifiés
+    // Détection du mode sombre du système
+    const prefersDarkMode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    debug.info(`Mode sombre détecté: ${prefersDarkMode ? 'Oui' : 'Non'}`);
+    
+    // Création du nouvel élément avec le style glassmorphism et design moderne
     const newElement = document.createElement("li");
     newElement.setAttribute(dynamicClass, "");
-    newElement.className = "itemFrise active ng-star-inserted";
+    newElement.className = `itemFrise active ng-star-inserted naturalisation-status ${prefersDarkMode ? CONFIG.UI.THEME_DARK_CLASS : ''}`;
+    newElement.id = CONFIG.UI.CONTAINER_ID;
+    
+    // Style de base pour le glassmorphism
+    const glassBg = prefersDarkMode ? 'rgba(25, 25, 35, 0.7)' : 'rgba(255, 255, 255, 0.7)';
+    const glassBorder = prefersDarkMode ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid rgba(255, 255, 255, 0.5)';
+    const glassTextColor = prefersDarkMode ? '#e1e1e1' : '#080000';
+    const glassAccentColor = prefersDarkMode ? '#5d9cec' : '#255a99'; 
+    const glassAccentSecondary = prefersDarkMode ? '#ec5d5d' : '#bf2626';
+    
     newElement.setAttribute(
       "style",
       `
-      background: linear-gradient(165deg, #dbe2e9, #ffffff);
-      border: 2px solid #255a99;
-      border-radius: 8px;
-      box-shadow: inset 2px 2px 5px rgba(0, 0, 0, 0.2), 5px 5px 15px rgba(0, 0, 0, 0.3);
+      background: ${glassBg};
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      -moz-backdrop-filter: blur(10px);
+      border: ${glassBorder};
+      border-radius: 16px;
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
+      -moz-box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
+      -webkit-box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-family: Arial, sans-serif;
-      font-size: 18px;
-      color: #080000;
+      font-family: 'Segoe UI', Roboto, Arial, sans-serif;
+      font-size: 16px;
+      color: ${glassTextColor};
       flex-wrap: wrap;
-      cursor: pointer;
+      overflow: hidden;
+      transition: all 0.3s ease;
+      margin: 15px 0;
+      max-width: 280px;
+      width: 280px;
+      min-height: auto;
+      height: auto;
     `
     );
-    newElement.innerHTML = `
-      <div ${dynamicClass} class="itemFriseContent" style="width: 100%;">
-        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-          <span ${dynamicClass} class="itemFriseIcon">
-            <span ${dynamicClass} aria-hidden="true" class="fa fa-hourglass-start" style="color: #bf2626!important;"></span>
-          </span>
-          <p ${dynamicClass} style="flex-grow: 1;">
-            ${dossierStatus} <span style="color: #bf2626;">(${daysAgo(
-      data?.dossier?.date_statut
-    )})</span>
-          </p>
-          <span id="toggle-history-btn" style="cursor: pointer; padding: 5px 10px; background: #255a99; color: white; border-radius: 4px; margin-left: 15px; font-size: 14px;">
-            Historique
-          </span>
-        </div>
-        <div id="status-history-container" style="display: none; width: 100%; margin-top: 15px; max-height: 300px; overflow-y: auto; padding: 10px; background-color: #f8f9fa; border-radius: 5px; border: 1px solid #dee2e6;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-            <h3 style="margin: 0; color: #255a99;">Historique des statuts</h3>
-          </div>
-          <div id="history-items-container" style="overflow-y: auto;">
-            <div style="text-align: center; padding: 20px;">Chargement de l'historique...</div>
-          </div>
-        </div>
-      </div>
+    
+    // Récupérer l'icône et la classe CSS pour le statut
+    const statusIcon = utils.statusUtils.getStatusIcon(dossierStatusCode.toLowerCase()) || '⏳';
+    const statusClass = utils.statusUtils.getStatusClass(dossierStatusCode.toLowerCase()) || '';
+    
+    // Générer le contenu HTML avec interface moderne et timeline - version corrigée
+    const mainContainer = document.createElement('div');
+    if (dynamicClass) mainContainer.setAttribute(dynamicClass, '');
+    mainContainer.classList.add('itemFriseContent', 'naturalisation-content');
+    mainContainer.style.width = '100%';
+    mainContainer.style.maxWidth = '100%';
+    mainContainer.style.boxSizing = 'border-box';
+    mainContainer.style.overflowX = 'hidden';
+    mainContainer.style.margin = '0';
+    mainContainer.style.padding = '2px 12px';
+    mainContainer.style.transform = 'translateY(-6px)'; // Remonte encore plus le composant
+    
+    const topContainer = document.createElement('div');
+    topContainer.style.display = 'flex';
+    topContainer.style.flexDirection = 'column';
+    topContainer.style.alignItems = 'flex-start';
+    topContainer.style.width = '100%';
+    topContainer.style.maxWidth = '100%';
+    topContainer.style.boxSizing = 'border-box';
+    topContainer.style.margin = '0';
+    topContainer.style.padding = '0';
+    topContainer.style.gap = '4px';
+    
+    const statusCard = document.createElement('div');
+    statusCard.style.display = 'flex';
+    statusCard.style.flexDirection = 'row';
+    statusCard.style.alignItems = 'center';
+    statusCard.style.justifyContent = 'flex-start';
+    statusCard.style.background = prefersDarkMode ? 
+      'linear-gradient(135deg, rgba(30, 35, 50, 0.96) 0%, rgba(40, 45, 60, 0.96) 100%)' : 
+      'linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(250, 252, 255, 0.98) 100%)';
+    statusCard.style.borderRadius = '12px';
+    statusCard.style.padding = '10px 12px';
+    statusCard.style.minHeight = '42px';
+    statusCard.style.width = '100%';
+    statusCard.style.maxWidth = '100%';
+    statusCard.style.minWidth = 'auto';
+    statusCard.style.boxSizing = 'border-box';
+    statusCard.style.boxShadow = prefersDarkMode ? 
+      '0 3px 18px rgba(0,0,0,0.35), 0 1px 6px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.06)' : 
+      '0 3px 18px rgba(0,0,0,0.06), 0 1px 8px rgba(0,0,0,0.03), inset 0 1px 0 rgba(255,255,255,0.8)';
+    statusCard.style.border = prefersDarkMode ? 
+      '0.5px solid rgba(99, 139, 218, 0.15)' : 
+      '1px solid rgba(59, 130, 246, 0.2)';
+    statusCard.style.textAlign = 'left';
+    statusCard.style.backdropFilter = 'blur(10px)';
+    statusCard.style.webkitBackdropFilter = 'blur(10px)';
+    statusCard.style.position = 'relative';
+    statusCard.style.overflow = 'hidden';
+    statusCard.style.transition = 'all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1)';
+    statusCard.style.cursor = 'pointer';
+    statusCard.style.margin = '0';
+    
+    // Ajouter un effet de brillance subtile
+    const shimmer = document.createElement('div');
+    shimmer.style.position = 'absolute';
+    shimmer.style.top = '0';
+    shimmer.style.left = '-100%';
+    shimmer.style.width = '100%';
+    shimmer.style.height = '100%';
+    shimmer.style.background = 'linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent)';
+    shimmer.style.transition = 'left 0.8s ease';
+    shimmer.style.pointerEvents = 'none';
+    statusCard.appendChild(shimmer);
+    
+    const iconWrapper = document.createElement('div');
+    iconWrapper.className = 'status-icon-wrapper';
+    iconWrapper.style.display = 'flex';
+    iconWrapper.style.alignItems = 'center';
+    iconWrapper.style.justifyContent = 'center';
+    iconWrapper.style.minWidth = '36px';
+    iconWrapper.style.minHeight = '36px';
+    iconWrapper.style.borderRadius = '50%';
+    iconWrapper.style.background = prefersDarkMode ? 
+      'linear-gradient(135deg, rgba(99, 139, 218, 0.5) 0%, rgba(59, 130, 246, 0.5) 100%)' : 
+      'linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(99, 139, 218, 0.15) 100%)';
+    iconWrapper.style.margin = '0 10px 0 0';
+    iconWrapper.style.boxShadow = prefersDarkMode ? 
+      '0 3px 10px rgba(59, 130, 246, 0.25), inset 0 1px 0 rgba(255,255,255,0.08), 0 0 15px rgba(59, 130, 246, 0.08)' : 
+      '0 3px 10px rgba(59, 130, 246, 0.12), inset 0 1px 0 rgba(255,255,255,0.3), 0 0 15px rgba(59, 130, 246, 0.04)';
+    iconWrapper.style.border = prefersDarkMode ? 
+      '1px solid rgba(99, 139, 218, 0.2)' : 
+      '2px solid rgba(59, 130, 246, 0.2)';
+    iconWrapper.style.flexShrink = '0';
+    iconWrapper.style.transition = 'all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1)';
+    iconWrapper.style.position = 'relative';
+    iconWrapper.style.zIndex = '2';
+    
+    const iconSpan = document.createElement('span');
+    if (dynamicClass) iconSpan.className = dynamicClass;
+    iconSpan.classList.add('status-icon', statusClass);
+    iconSpan.style.fontSize = '22px';
+    iconSpan.style.textShadow = '0 2px 4px rgba(0,0,0,0.3)';
+    iconSpan.style.filter = 'drop-shadow(0 0 6px rgba(59, 130, 246, 0.4))';
+    iconSpan.style.transition = 'all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1)';
+    iconSpan.style.transform = 'scale(1)';
+    iconSpan.textContent = statusIcon;
+    
+    iconWrapper.appendChild(iconSpan);
+    statusCard.appendChild(iconWrapper);
+    
+    const contentBox = document.createElement('div');
+    contentBox.style.display = 'flex';
+    contentBox.style.flexDirection = 'column';
+    contentBox.style.flex = '1';
+    contentBox.style.minWidth = '0'; // Important pour le flex-shrink
+    contentBox.style.alignItems = 'flex-start';
+    contentBox.style.textAlign = 'left';
+    contentBox.style.overflow = 'hidden';
+    contentBox.style.maxWidth = '100%';
+    contentBox.style.boxSizing = 'border-box';
+    
+    const statusTitle = document.createElement('h2');
+    statusTitle.style.margin = '0';
+    statusTitle.style.fontSize = '15px';
+    statusTitle.style.lineHeight = '1.4';
+    statusTitle.style.fontWeight = '700';
+    statusTitle.style.color = prefersDarkMode ? '#ffffff' : '#1e293b';
+    statusTitle.style.textShadow = prefersDarkMode ? 
+      '0 2px 4px rgba(0,0,0,0.5)' : 
+      '0 1px 2px rgba(255,255,255,0.8)';
+    statusTitle.style.letterSpacing = '0.3px';
+    statusTitle.style.wordWrap = 'break-word';
+    statusTitle.style.overflowWrap = 'break-word';
+    statusTitle.style.textAlign = 'left';
+    statusTitle.style.marginBottom = '4px';
+    statusTitle.style.whiteSpace = 'normal';
+    statusTitle.style.fontFamily = "'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif";
+    statusTitle.style.position = 'relative';
+    statusTitle.style.zIndex = '2';
+    statusTitle.style.maxWidth = '100%';
+    statusTitle.style.minWidth = '0';
+    statusTitle.style.boxSizing = 'border-box';
+    statusTitle.style.overflow = 'hidden';
+    statusTitle.style.textOverflow = 'ellipsis';
+    statusTitle.style.hyphens = 'auto';
+    statusTitle.textContent = dossierStatus;
+    
+    const timeBadge = document.createElement('div');
+    timeBadge.style.display = 'inline-flex';
+    timeBadge.style.alignItems = 'center';
+    timeBadge.style.marginTop = '4px';
+    timeBadge.style.padding = '4px 10px';
+    timeBadge.style.background = prefersDarkMode ? 
+      'linear-gradient(135deg, rgba(239, 68, 68, 0.8) 0%, rgba(220, 38, 38, 0.8) 100%)' : 
+      'linear-gradient(135deg, rgba(254, 226, 226, 0.9) 0%, rgba(252, 165, 165, 0.9) 100%)';
+    timeBadge.style.color = prefersDarkMode ? '#ffffff' : '#991b1b';
+    timeBadge.style.borderRadius = '16px';
+    timeBadge.style.fontWeight = '700';
+    timeBadge.style.fontSize = '11px';
+    timeBadge.style.boxShadow = prefersDarkMode ? 
+      '0 3px 8px rgba(239, 68, 68, 0.4), inset 0 1px 0 rgba(255,255,255,0.15)' : 
+      '0 3px 8px rgba(220, 38, 38, 0.2), inset 0 1px 0 rgba(255,255,255,0.7)';
+    timeBadge.style.border = prefersDarkMode ? 
+      '1px solid rgba(239, 68, 68, 0.5)' : 
+      '1px solid rgba(220, 38, 38, 0.3)';
+    timeBadge.style.letterSpacing = '0.3px';
+    timeBadge.style.textAlign = 'center';
+    timeBadge.style.whiteSpace = 'nowrap';
+    timeBadge.style.backdropFilter = 'blur(6px)';
+    timeBadge.style.transition = 'all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1)';
+    timeBadge.style.textShadow = prefersDarkMode ? '0 1px 2px rgba(0,0,0,0.4)' : '0 1px 2px rgba(255,255,255,0.6)';
+    timeBadge.style.fontFamily = "'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif";
+    
+    const timeIcon = document.createElement('span');
+    timeIcon.style.marginRight = '4px';
+    timeIcon.style.fontSize = '10px';
+    timeIcon.style.filter = 'drop-shadow(0 0 3px rgba(239, 68, 68, 0.6))';
+    timeIcon.style.transform = 'scale(1.1)';
+    timeIcon.textContent = '⏳';
+    
+    timeBadge.appendChild(timeIcon);
+    timeBadge.appendChild(document.createTextNode(daysAgo(data?.dossier?.date_statut)));
+    
+    contentBox.appendChild(statusTitle);
+    contentBox.appendChild(timeBadge);
+    statusCard.appendChild(contentBox);
+    
+    // Ajouter le bouton historique directement dans la statusCard à droite
+    const historyBtn = document.createElement('button');
+    historyBtn.id = 'toggle-history-btn';
+    historyBtn.style.cursor = 'pointer';
+    historyBtn.style.padding = '8px 10px';
+    historyBtn.style.background = prefersDarkMode ? 
+      'linear-gradient(135deg, rgba(59, 130, 246, 0.9) 0%, rgba(37, 99, 235, 0.9) 100%)' : 
+      'linear-gradient(135deg, rgba(59, 130, 246, 1) 0%, rgba(37, 99, 235, 1) 100%)';
+    historyBtn.style.color = 'white';
+    historyBtn.style.border = 'none';
+    historyBtn.style.borderRadius = '12px';
+    historyBtn.style.fontSize = '11px';
+    historyBtn.style.transition = 'all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1)';
+    historyBtn.style.display = 'flex';
+    historyBtn.style.alignItems = 'center';
+    historyBtn.style.justifyContent = 'center';
+    historyBtn.style.boxShadow = prefersDarkMode ? 
+      '0 4px 12px rgba(59, 130, 246, 0.4), inset 0 1px 0 rgba(255,255,255,0.2)' : 
+      '0 4px 12px rgba(59, 130, 246, 0.3), inset 0 1px 0 rgba(255,255,255,0.4)';
+    historyBtn.style.fontWeight = '700';
+    historyBtn.style.outline = 'none';
+    historyBtn.style.whiteSpace = 'nowrap';
+    historyBtn.style.height = '32px';
+    historyBtn.style.minWidth = '65px';
+    historyBtn.style.maxWidth = '80px';
+    historyBtn.style.marginLeft = '10px';
+    historyBtn.style.flexShrink = '0';
+    historyBtn.style.textShadow = '0 1px 3px rgba(0,0,0,0.4)';
+    historyBtn.style.letterSpacing = '0.3px';
+    historyBtn.style.position = 'relative';
+    historyBtn.style.overflow = 'hidden';
+    historyBtn.style.fontFamily = "'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif";
+    historyBtn.style.transform = 'scale(1)';
+    historyBtn.style.zIndex = '2';
+    historyBtn.style.boxSizing = 'border-box';
+    
+    const btnIcon = document.createElement('span');
+    btnIcon.style.marginRight = '4px';
+    btnIcon.style.fontSize = '11px';
+    btnIcon.style.filter = 'drop-shadow(0 0 4px rgba(255,255,255,0.6))';
+    btnIcon.style.transition = 'all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1)';
+    btnIcon.style.transform = 'scale(1)';
+    btnIcon.style.flexShrink = '0';
+    btnIcon.textContent = '📋';
+    
+    const btnText = document.createElement('span');
+    btnText.style.overflow = 'hidden';
+    btnText.style.textOverflow = 'ellipsis';
+    btnText.style.whiteSpace = 'nowrap';
+    btnText.style.maxWidth = '40px';
+    btnText.textContent = 'Hist.';
+    
+    historyBtn.appendChild(btnIcon);
+    historyBtn.appendChild(btnText);
+    
+    statusCard.appendChild(historyBtn);
+    
+    topContainer.appendChild(statusCard);
+    mainContainer.appendChild(topContainer);
+    
+    // Container pour l'historique (caché initialement)
+    const historyContainer = document.createElement('div');
+    historyContainer.id = 'status-history-container';
+    historyContainer.style.display = 'none';
+    historyContainer.style.width = '100%';
+    historyContainer.style.opacity = '0';
+    historyContainer.style.transition = 'opacity 0.5s ease';
+    historyContainer.style.marginTop = '12px';
+    historyContainer.style.background = prefersDarkMode ? 
+      'linear-gradient(135deg, rgba(20, 25, 40, 0.98) 0%, rgba(35, 45, 65, 0.98) 100%)' : 
+      'linear-gradient(135deg, rgba(248, 250, 252, 0.98) 0%, rgba(241, 245, 249, 0.98) 100%)';
+    historyContainer.style.borderRadius = '12px';
+    historyContainer.style.padding = '16px';
+    historyContainer.style.boxShadow = prefersDarkMode ? 
+      '0 8px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255,255,255,0.05)' : 
+      '0 8px 32px rgba(99, 139, 218, 0.08), inset 0 1px 0 rgba(255,255,255,0.8)';
+    historyContainer.style.border = prefersDarkMode ? 
+      '1px solid rgba(99, 139, 218, 0.15)' : 
+      '1px solid rgba(59, 130, 246, 0.2)';
+    historyContainer.style.backdropFilter = 'blur(10px)';
+    historyContainer.style.webkitBackdropFilter = 'blur(10px)';
+    historyContainer.style.boxSizing = 'border-box';
+    
+    const timelineHeader = document.createElement('div');
+    timelineHeader.className = 'timeline-header';
+    timelineHeader.style.display = 'flex';
+    timelineHeader.style.justifyContent = 'space-between';
+    timelineHeader.style.alignItems = 'center';
+    timelineHeader.style.marginBottom = '16px';
+    timelineHeader.style.borderBottom = prefersDarkMode ? 
+      '1px solid rgba(255,255,255,0.1)' : 
+      '1px solid rgba(0,0,0,0.08)';
+    timelineHeader.style.paddingBottom = '12px';
+    
+    const timelineTitle = document.createElement('h3');
+    timelineTitle.style.margin = '0';
+    timelineTitle.style.color = prefersDarkMode ? '#ffffff' : '#1e293b';
+    timelineTitle.style.fontWeight = '600';
+    timelineTitle.style.fontSize = '16px';
+    timelineTitle.style.textShadow = prefersDarkMode ? 
+      '0 2px 4px rgba(0,0,0,0.5)' : 
+      '0 1px 2px rgba(255,255,255,0.8)';
+    timelineTitle.style.fontFamily = "'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif";
+    timelineTitle.textContent = 'Historique des statuts';
+    
+    const timelineCounter = document.createElement('span');
+    timelineCounter.className = 'timeline-counter';
+    timelineCounter.id = 'timeline-counter';
+    timelineCounter.style.fontSize = '12px';
+    timelineCounter.style.color = prefersDarkMode ? '#ffffff' : '#1e293b';
+    timelineCounter.style.fontWeight = '600';
+    timelineCounter.style.background = prefersDarkMode ? 
+      'linear-gradient(135deg, rgba(59, 130, 246, 0.3) 0%, rgba(99, 139, 218, 0.3) 100%)' : 
+      'linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(99, 139, 218, 0.15) 100%)';
+    timelineCounter.style.padding = '6px 12px';
+    timelineCounter.style.borderRadius = '14px';
+    timelineCounter.style.border = prefersDarkMode ? 
+      '1px solid rgba(59, 130, 246, 0.4)' : 
+      '1px solid rgba(59, 130, 246, 0.25)';
+    timelineCounter.style.fontFamily = "'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif";
+    timelineCounter.style.textShadow = prefersDarkMode ? 
+      '0 1px 2px rgba(0,0,0,0.5)' : 
+      '0 1px 2px rgba(255,255,255,0.8)';
+    timelineCounter.style.boxShadow = `0 3px 8px rgba(59, 130, 246, ${prefersDarkMode ? '0.2' : '0.1'}), 
+                                       inset 0 1px 0 rgba(255,255,255,${prefersDarkMode ? '0.1' : '0.5'})`;
+    timelineCounter.style.backdropFilter = 'blur(8px)';
+    timelineCounter.style.webkitBackdropFilter = 'blur(8px)';
+    timelineCounter.style.letterSpacing = '0.3px';
+    timelineCounter.style.transition = 'all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)';
+    
+    timelineHeader.appendChild(timelineTitle);
+    timelineHeader.appendChild(timelineCounter);
+    historyContainer.appendChild(timelineHeader);
+    
+    const timelineDiv = document.createElement('div');
+    timelineDiv.id = CONFIG.UI.TIMELINE_ID;
+    timelineDiv.className = 'timeline';
+    timelineDiv.style.position = 'relative';
+    timelineDiv.style.paddingLeft = '20px';
+    timelineDiv.style.maxHeight = '280px';
+    timelineDiv.style.overflowY = 'auto';
+    timelineDiv.style.overflowX = 'hidden';
+    timelineDiv.style.scrollbarWidth = 'thin';
+    timelineDiv.style.scrollbarColor = prefersDarkMode ? 
+      'rgba(99, 139, 218, 0.5) transparent' : 
+      'rgba(59, 130, 246, 0.3) transparent';
+    
+    // Styles personnalisés pour la scrollbar
+    const scrollbarStyle = document.createElement('style');
+    scrollbarStyle.textContent = `
+      #${CONFIG.UI.TIMELINE_ID}::-webkit-scrollbar {
+        width: 6px;
+      }
+      #${CONFIG.UI.TIMELINE_ID}::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      #${CONFIG.UI.TIMELINE_ID}::-webkit-scrollbar-thumb {
+        background: ${prefersDarkMode ? 'rgba(99, 139, 218, 0.5)' : 'rgba(59, 130, 246, 0.3)'};
+        border-radius: 3px;
+      }
+      #${CONFIG.UI.TIMELINE_ID}::-webkit-scrollbar-thumb:hover {
+        background: ${prefersDarkMode ? 'rgba(99, 139, 218, 0.7)' : 'rgba(59, 130, 246, 0.5)'};
+      }
     `;
+    document.head.appendChild(scrollbarStyle);
+    
+    const historyItemsContainer = document.createElement('div');
+    historyItemsContainer.id = 'history-items-container';
+    historyItemsContainer.style.position = 'relative';
+    
+    const loadingMessage = document.createElement('div');
+    loadingMessage.style.textAlign = 'center';
+    loadingMessage.style.padding = '20px';
+    loadingMessage.style.opacity = '0.7';
+    loadingMessage.textContent = 'Chargement de l\'historique...';
+    
+    historyItemsContainer.appendChild(loadingMessage);
+    timelineDiv.appendChild(historyItemsContainer);
+    historyContainer.appendChild(timelineDiv);
+    mainContainer.appendChild(historyContainer);
+    
+    newElement.appendChild(mainContainer);
 
     activeStep.parentNode.insertBefore(newElement, activeStep.nextSibling);
     console.log(
@@ -615,25 +1094,370 @@
       const historyContainer = document.getElementById('status-history-container');
       const historyItemsContainer = document.getElementById('history-items-container');
       
+      // Ajouter les styles CSS premium pour un design moderne et raffiné
+      const style = document.createElement('style');
+      style.textContent = `
+        /* Variables CSS pour cohérence */
+        :root {
+          --naturalisation-primary: ${prefersDarkMode ? 'rgba(59, 130, 246, 1)' : 'rgba(59, 130, 246, 1)'};
+          --naturalisation-bg: ${prefersDarkMode ? 'rgba(30, 35, 50, 0.96)' : 'rgba(255, 255, 255, 0.98)'};
+          --naturalisation-text: ${prefersDarkMode ? '#ffffff' : '#1e293b'};
+          --naturalisation-shadow: ${prefersDarkMode ? 'rgba(0,0,0,0.4)' : 'rgba(0,0,0,0.08)'};
+        }
+        
+        /* Assurer le box-sizing correct pour tous les éléments */
+        .naturalisation-status,
+        .naturalisation-status *,
+        .naturalisation-status *::before,
+        .naturalisation-status *::after {
+          box-sizing: border-box !important;
+        }
+        
+        .naturalisation-status {
+          max-width: 100% !important;
+          width: 100% !important;
+          transform: translateY(-6px) !important;
+        }
+        
+        .naturalisation-content {
+          padding: 2px 12px !important;
+        }
+        
+        /* Ligne de timeline élégante */
+        .timeline::before {
+          content: '';
+          position: absolute;
+          left: -28px;
+          top: 0;
+          bottom: 0;
+          width: 2px;
+          background: ${prefersDarkMode ? 
+            'linear-gradient(180deg, rgba(59, 130, 246, 0.6) 0%, rgba(59, 130, 246, 0.3) 50%, rgba(59, 130, 246, 0.1) 100%)' : 
+            'linear-gradient(180deg, rgba(59, 130, 246, 0.4) 0%, rgba(59, 130, 246, 0.2) 50%, rgba(59, 130, 246, 0.1) 100%)'};
+          border-radius: 1px;
+          box-shadow: 0 0 4px rgba(59, 130, 246, ${prefersDarkMode ? '0.3' : '0.2'});
+        }
+        
+        /* Amélioration des items de timeline */
+        .timeline-item:not(:last-child)::after {
+          content: '';
+          position: absolute;
+          left: -29px;
+          top: 32px;
+          bottom: -18px;
+          width: 4px;
+          background: ${prefersDarkMode ? 
+            'linear-gradient(180deg, rgba(59, 130, 246, 0.4) 0%, rgba(59, 130, 246, 0.2) 50%, transparent 100%)' : 
+            'linear-gradient(180deg, rgba(59, 130, 246, 0.3) 0%, rgba(59, 130, 246, 0.15) 50%, transparent 100%)'};
+          border-radius: 2px;
+          z-index: 1;
+        }
+        
+        @keyframes iconPulse {
+          0%, 100% { 
+            transform: scale(1) rotate(0deg);
+            filter: drop-shadow(0 0 6px rgba(59, 130, 246, 0.4));
+          }
+          25% { 
+            transform: scale(1.05) rotate(2deg);
+            filter: drop-shadow(0 0 12px rgba(59, 130, 246, 0.6));
+          }
+          75% { 
+            transform: scale(1.02) rotate(-1deg);
+            filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.5));
+          }
+        }
+        
+        @keyframes shimmerEffect {
+          0% { left: -100%; }
+          100% { left: 100%; }
+        }
+        
+        /* Effets hover premium */
+        .naturalisation-content .itemFriseContent:hover {
+          transform: translateY(-3px) scale(1.02) !important;
+          box-shadow: 0 12px 40px var(--naturalisation-shadow), 
+                      0 6px 20px rgba(59, 130, 246, 0.1),
+                      inset 0 1px 0 rgba(255,255,255,0.2) !important;
+          filter: brightness(1.05) !important;
+        }
+        
+        .naturalisation-content .itemFriseContent:hover > div:first-child {
+          animation: shimmerEffect 1.5s ease-in-out !important;
+        }
+        
+        .naturalisation-content .status-icon-wrapper:hover {
+          transform: scale(1.15) rotate(8deg) !important;
+          box-shadow: 0 8px 24px rgba(59, 130, 246, 0.4), 
+                      inset 0 2px 0 rgba(255,255,255,0.2),
+                      0 0 30px rgba(59, 130, 246, 0.2) !important;
+        }
+        
+        .naturalisation-content .itemFriseContent:hover .status-icon-wrapper .status-icon {
+          animation: iconPulse 2s infinite !important;
+          transform: scale(1.1) !important;
+        }
+        
+        /* Interactions dans l'historique */
+        .timeline-item:hover .timeline-content {
+          transform: translateX(4px) !important;
+          box-shadow: 0 6px 24px rgba(0,0,0,${prefersDarkMode ? '0.3' : '0.12'}), 
+                      0 2px 8px rgba(59, 130, 246, 0.1) !important;
+          border-color: ${prefersDarkMode ? 'rgba(59, 130, 246, 0.3)' : 'rgba(59, 130, 246, 0.2)'} !important;
+        }
+        
+        .timeline-item:hover .timeline-point {
+          transform: scale(1.15) !important;
+          box-shadow: 0 6px 16px rgba(0,0,0,${prefersDarkMode ? '0.4' : '0.2'}), 
+                      0 0 0 4px ${prefersDarkMode ? 'rgba(20,25,40,0.9)' : 'rgba(255,255,255,0.95)'} !important;
+        }
+        
+        .timeline-content {
+          transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1) !important;
+        }
+        
+        .timeline-point {
+          transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1) !important;
+        }
+        
+        /* Amélioration du badge de temps */
+        .timeline-time-badge {
+          transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1) !important;
+        }
+        
+        .timeline-item:hover .timeline-time-badge {
+          transform: scale(1.05) !important;
+          box-shadow: 0 4px 12px rgba(59, 130, 246, ${prefersDarkMode ? '0.3' : '0.15'}) !important;
+        }
+                      0 0 20px rgba(59, 130, 246, 0.3) !important;
+          background: linear-gradient(135deg, rgba(37, 99, 235, 1) 0%, rgba(29, 78, 216, 1) 100%) !important;
+          filter: brightness(1.1) !important;
+        }
+        
+        .naturalisation-content #toggle-history-btn:active {
+          transform: translateY(-1px) scale(1.02) !important;
+          transition: all 0.1s ease !important;
+        }
+        
+        /* Effet de brillance sur le bouton */
+        .naturalisation-content #toggle-history-btn::before {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: -100%;
+          width: 100%;
+          height: 100%;
+          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+          transition: left 0.8s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+        
+        .naturalisation-content #toggle-history-btn:hover::before {
+          left: 100%;
+        }
+        
+        /* Responsive design premium - Éviter les débordements */
+        @media (max-width: 768px) {
+          .naturalisation-status {
+            max-width: 100% !important;
+            width: 100% !important;
+            transform: translateY(-6px) !important;
+          }
+          
+          .naturalisation-content {
+            padding: 2px 10px !important;
+          }
+          
+          .status-icon-wrapper {
+            min-width: 34px !important;
+            min-height: 34px !important;
+            flex-shrink: 0 !important;
+          }
+          
+          .status-icon {
+            font-size: 20px !important;
+          }
+          
+          #toggle-history-btn {
+            font-size: 10px !important;
+            padding: 6px 8px !important;
+            min-width: 60px !important;
+            height: 30px !important;
+            flex-shrink: 0 !important;
+          }
+          
+          h2 {
+            font-size: 14px !important;
+            line-height: 1.3 !important;
+            flex: 1 !important;
+            min-width: 0 !important;
+          }
+        }
+        
+        @media (max-width: 480px) {
+          .naturalisation-status {
+            max-width: 100% !important;
+            width: 100% !important;
+            transform: translateY(-6px) !important;
+          }
+          
+          .naturalisation-content {
+            padding: 2px 8px !important;
+          }
+          
+          .status-icon-wrapper {
+            min-width: 30px !important;
+            min-height: 30px !important;
+            flex-shrink: 0 !important;
+          }
+          
+          .status-icon {
+            font-size: 18px !important;
+          }
+          
+          h2 {
+            font-size: 13px !important;
+            line-height: 1.2 !important;
+            flex: 1 !important;
+            min-width: 0 !important;
+          }
+          
+          #toggle-history-btn {
+            font-size: 9px !important;
+            padding: 5px 6px !important;
+            min-width: 45px !important;
+            max-width: 50px !important;
+            height: 28px !important;
+            flex-shrink: 0 !important;
+            margin-left: 8px !important;
+          }
+          
+          #toggle-history-btn span:last-child {
+            display: none !important;
+          }
+          
+          #toggle-history-btn span:first-child {
+            margin-right: 0 !important;
+            font-size: 12px !important;
+          }
+        }
+        
+        /* Écrans extra-petits */
+        @media (max-width: 360px) {
+          .naturalisation-status {
+            transform: translateY(-6px) !important;
+          }
+          
+          .naturalisation-content {
+            padding: 2px 6px !important;
+          }
+          
+          .status-icon-wrapper {
+            min-width: 28px !important;
+            min-height: 28px !important;
+            margin-right: 6px !important;
+          }
+          
+          .status-icon {
+            font-size: 16px !important;
+          }
+          
+          h2 {
+            font-size: 12px !important;
+            line-height: 1.1 !important;
+          }
+          
+          #toggle-history-btn {
+            min-width: 40px !important;
+            max-width: 40px !important;
+            height: 26px !important;
+            padding: 4px !important;
+            margin-left: 6px !important;
+          }
+          
+          #toggle-history-btn span:first-child {
+            font-size: 11px !important;
+          }
+          
+          .timeline {
+            max-height: 160px !important;
+            padding-left: 14px !important;
+          }
+          
+          #toggle-history-btn {
+            font-size: 9px !important;
+            padding: 5px 8px !important;
+            min-width: 55px !important;
+            height: 28px !important;
+          }
+        }
+        
+        /* États focus pour l'accessibilité */
+        .naturalisation-content #toggle-history-btn:focus {
+          outline: 2px solid rgba(59, 130, 246, 0.5);
+          outline-offset: 2px;
+        }
+        
+        /* Améliorations typographiques */
+        .naturalisation-content h2 {
+          font-optical-sizing: auto !important;
+          text-rendering: optimizeLegibility !important;
+        }
+        
+        /* Smooth scrolling pour la timeline */
+        .timeline {
+          scroll-behavior: smooth !important;
+        }
+      `;
+      document.head.appendChild(style);
+      
       if (toggleBtn && historyContainer && historyItemsContainer) {
+        const btnIcon = toggleBtn.querySelector('span:first-child');
+        const btnText = toggleBtn.querySelector('span:last-child');
+        
         toggleBtn.addEventListener('click', async function() {
           if (historyContainer.style.display === 'none') {
+            // Afficher l'historique
             historyContainer.style.display = 'block';
-            toggleBtn.textContent = 'Masquer';
-            toggleBtn.style.background = '#bf2626';
+            setTimeout(() => {
+              historyContainer.style.opacity = '1';
+            }, 10);
+            
+            // Changer l'apparence du bouton
+            btnIcon.textContent = '❌';
+            btnText.textContent = 'Ferm.';
+            toggleBtn.style.background = prefersDarkMode ? 
+              'linear-gradient(135deg, rgba(239, 68, 68, 0.9) 0%, rgba(220, 38, 38, 0.9) 100%)' : 
+              'linear-gradient(135deg, rgba(220, 38, 38, 1) 0%, rgba(185, 28, 28, 1) 100%)';
+            toggleBtn.style.transform = 'scale(1.02)';
+            toggleBtn.style.boxShadow = prefersDarkMode ? 
+              '0 4px 16px rgba(239, 68, 68, 0.4), inset 0 1px 0 rgba(255,255,255,0.2)' : 
+              '0 4px 16px rgba(220, 38, 38, 0.3), inset 0 1px 0 rgba(255,255,255,0.4)';
             
             // Charger l'historique à la demande
-            historyItemsContainer.innerHTML = await generateHistoryHtml();
+            await generateHistoryElements(historyItemsContainer);
           } else {
-            historyContainer.style.display = 'none';
-            toggleBtn.textContent = 'Historique';
-            toggleBtn.style.background = '#255a99';
+            // Masquer l'historique
+            historyContainer.style.opacity = '0';
+            setTimeout(() => {
+              historyContainer.style.display = 'none';
+            }, 500);
+            
+            // Restaurer l'apparence du bouton
+            btnIcon.textContent = '📋';
+            btnText.textContent = 'Hist.';
+            toggleBtn.style.background = prefersDarkMode ? 
+              'linear-gradient(135deg, rgba(59, 130, 246, 0.9) 0%, rgba(37, 99, 235, 0.9) 100%)' : 
+              'linear-gradient(135deg, rgba(59, 130, 246, 1) 0%, rgba(37, 99, 235, 1) 100%)';
+            toggleBtn.style.transform = 'scale(1)';
+            toggleBtn.style.boxShadow = prefersDarkMode ? 
+              '0 4px 12px rgba(59, 130, 246, 0.4), inset 0 1px 0 rgba(255,255,255,0.2)' : 
+              '0 4px 12px rgba(59, 130, 246, 0.3), inset 0 1px 0 rgba(255,255,255,0.4)';
           }
         });
         
         // Précharger l'historique après un court délai
         setTimeout(async () => {
-          historyItemsContainer.innerHTML = await generateHistoryHtml();
+          await generateHistoryElements(historyItemsContainer);
         }, 1000);
       }
     }, 500);

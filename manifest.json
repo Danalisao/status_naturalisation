@@ -26,7 +26,7 @@
     "run_at": "document_end"
   }],
   "web_accessible_resources": [{
-    "resources": ["content.js", "crypto-js.min.js", "forge.min.js"],
+    "resources": ["content.js", "utils.js", "debug.js", "crypto-js.min.js", "forge.min.js", "styles.css"],
     "matches": ["https://administration-etrangers-en-france.interieur.gouv.fr/*"]
   }],
   "icons": {
