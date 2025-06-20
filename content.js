@@ -4,10 +4,21 @@
  * et utilise les modules utilitaires pour la gestion du stockage et des notifications.
  */
 (async function () {
+  // Protection contre les exécutions multiples
+  if (window.naturalisationExtensionLoaded) {
+    console.log('Extension API Naturalisation : Déjà chargée, abandon de la nouvelle exécution');
+    return;
+  }
+  window.naturalisationExtensionLoaded = true;
   // Utiliser les modules d'utilitaires si disponibles, sinon créer des objets de remplacement
   const utils = typeof NaturalisationUtils !== 'undefined' ? 
     NaturalisationUtils : {
-      CONFIG: {},
+      CONFIG: {
+        STORAGE_KEY: "naturalisation_status_data_fallback",
+        HISTORY_KEY: "naturalisation_status_history_fallback", 
+        HISTORY_MAX_ENTRIES: 30,
+        NOTIFICATION_ID: "status_naturalisation_notification_fallback"
+      },
       detectBrowser: () => null,
       storage: {
         save: async () => null,
@@ -28,6 +39,16 @@
       statusUtils: {
         getStatusIcon: () => '❓',
         getStatusClass: () => ''
+      },
+      domUtils: {
+        createElementWithUniqueId: (tag, id, className) => {
+          const el = document.createElement(tag);
+          if (id) el.id = id;
+          if (className) el.className = className;
+          return el;
+        },
+        generateUniqueId: (prefix) => `${prefix}-${Date.now()}`,
+        elementExists: (id) => !!document.getElementById(id)
       }
     };
   
@@ -62,10 +83,11 @@
     API_ENDPOINT:
       "https://administration-etrangers-en-france.interieur.gouv.fr/api/anf/dossier-stepper",
     WAIT_TIME: 100,
-    STORAGE_KEY: "naturalisation_status_data",
-    HISTORY_KEY: "naturalisation_status_history",
-    HISTORY_MAX_ENTRIES: 30,
-    NOTIFICATION_ID: "status_naturalisation_notification",
+    STORAGE_KEY: utils.CONFIG.STORAGE_KEY || "naturalisation_status_data_fallback",
+    HISTORY_KEY: utils.CONFIG.HISTORY_KEY || "naturalisation_status_history_fallback",
+    HISTORY_MAX_ENTRIES: utils.CONFIG.HISTORY_MAX_ENTRIES || 30,
+    // Utilise l'ID de notification du module utils pour éviter les doublons
+    NOTIFICATION_ID: utils.CONFIG.NOTIFICATION_ID || "status_naturalisation_notification_fallback",
     NOTIFICATION_ICON: "icons/icon48.png",
     CACHE_DURATION: 30 * 60 * 1000, // 30 minutes
     DEBUG_MODE: true,
@@ -672,9 +694,33 @@
       }
     }
 
+    // Fonction utilitaire pour créer des éléments avec vérification d'unicité des IDs
+    function createElementWithUniqueId(tagName, id, className = '') {
+      // Supprimer l'élément existant s'il y en a un
+      const existingElement = document.getElementById(id);
+      if (existingElement) {
+        debug.info(`Élément existant trouvé avec ID '${id}', suppression pour éviter les doublons`);
+        existingElement.remove();
+      }
+      
+      const element = document.createElement(tagName);
+      element.id = id;
+      if (className) {
+        element.className = className;
+      }
+      return element;
+    }
+
     // Détection du mode sombre du système
     const prefersDarkMode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
     debug.info(`Mode sombre détecté: ${prefersDarkMode ? 'Oui' : 'Non'}`);
+    
+    // Vérifier si l'élément existe déjà pour éviter les doublons
+    let existingElement = document.getElementById(CONFIG.UI.CONTAINER_ID);
+    if (existingElement) {
+      debug.info('Élément de statut déjà présent, mise à jour au lieu de création');
+      existingElement.remove(); // Supprimer l'ancien élément pour le recréer avec les nouvelles données
+    }
     
     // Création du nouvel élément avec le style glassmorphism et design moderne
     const newElement = document.createElement("li");
@@ -901,8 +947,7 @@
     statusCard.appendChild(contentBox);
     
     // Ajouter le bouton historique directement dans la statusCard à droite
-    const historyBtn = document.createElement('button');
-    historyBtn.id = 'toggle-history-btn';
+    const historyBtn = createElementWithUniqueId('button', 'toggle-history-btn');
     historyBtn.style.cursor = 'pointer';
     historyBtn.style.padding = '8px 10px';
     historyBtn.style.background = prefersDarkMode ? 
@@ -961,8 +1006,7 @@
     mainContainer.appendChild(topContainer);
     
     // Container pour l'historique (caché initialement)
-    const historyContainer = document.createElement('div');
-    historyContainer.id = 'status-history-container';
+    const historyContainer = createElementWithUniqueId('div', 'status-history-container');
     historyContainer.style.display = 'none';
     historyContainer.style.width = '100%';
     historyContainer.style.opacity = '0';
@@ -1005,9 +1049,7 @@
     timelineTitle.style.fontFamily = "'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif";
     timelineTitle.textContent = 'Historique des statuts';
     
-    const timelineCounter = document.createElement('span');
-    timelineCounter.className = 'timeline-counter';
-    timelineCounter.id = 'timeline-counter';
+    const timelineCounter = createElementWithUniqueId('span', 'timeline-counter', 'timeline-counter');
     timelineCounter.style.fontSize = '12px';
     timelineCounter.style.color = prefersDarkMode ? '#ffffff' : '#1e293b';
     timelineCounter.style.fontWeight = '600';
@@ -1034,8 +1076,7 @@
     timelineHeader.appendChild(timelineCounter);
     historyContainer.appendChild(timelineHeader);
     
-    const timelineDiv = document.createElement('div');
-    timelineDiv.id = CONFIG.UI.TIMELINE_ID;
+    const timelineDiv = createElementWithUniqueId('div', CONFIG.UI.TIMELINE_ID);
     timelineDiv.className = 'timeline';
     timelineDiv.style.position = 'relative';
     timelineDiv.style.paddingLeft = '20px';
@@ -1066,8 +1107,7 @@
     `;
     document.head.appendChild(scrollbarStyle);
     
-    const historyItemsContainer = document.createElement('div');
-    historyItemsContainer.id = 'history-items-container';
+    const historyItemsContainer = createElementWithUniqueId('div', 'history-items-container');
     historyItemsContainer.style.position = 'relative';
     
     const loadingMessage = document.createElement('div');
@@ -1458,6 +1498,14 @@
         // Précharger l'historique après un court délai
         setTimeout(async () => {
           await generateHistoryElements(historyItemsContainer);
+          
+          // Vérification des IDs dupliqués pour le debugging
+          if (utils.domUtils && utils.domUtils.checkForDuplicateIds) {
+            const duplicates = utils.domUtils.checkForDuplicateIds();
+            if (duplicates.length > 0) {
+              console.error('Extension API Naturalisation: IDs dupliqués détectés:', duplicates);
+            }
+          }
         }, 1000);
       }
     }, 500);

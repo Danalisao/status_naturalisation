@@ -314,6 +314,9 @@ const NaturalisationUtils = (() => {
         // Créer le toast de manière sécurisée
         const toast = document.createElement('div');
         toast.className = `toast toast-${type}`;
+        // Générer un timestamp unique pour éviter tout conflit potentiel de classes
+        const uniqueClass = `toast-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        toast.classList.add(uniqueClass);
         
         // Créer les éléments de manière sécurisée
         const toastIcon = document.createElement('div');
@@ -623,6 +626,84 @@ const NaturalisationUtils = (() => {
   };
   
   /**
+   * Utilitaires pour la gestion du DOM et des identifiants uniques
+   */
+  const domUtils = {
+    /**
+     * Crée un élément avec un ID unique en supprimant l'élément existant si nécessaire
+     * @param {string} tagName - Type d'élément à créer
+     * @param {string} id - ID désiré pour l'élément
+     * @param {string} className - Classes CSS optionnelles
+     * @returns {HTMLElement} Élément créé
+     */
+    createElementWithUniqueId: function(tagName, id, className = '') {
+      // Supprimer l'élément existant s'il y en a un
+      const existingElement = document.getElementById(id);
+      if (existingElement) {
+        console.log(`Utils: Élément existant trouvé avec ID '${id}', suppression pour éviter les doublons`);
+        existingElement.remove();
+      }
+      
+      const element = document.createElement(tagName);
+      element.id = id;
+      if (className) {
+        element.className = className;
+      }
+      return element;
+    },
+    
+    /**
+     * Génère un ID unique basé sur un préfixe et un timestamp
+     * @param {string} prefix - Préfixe pour l'ID
+     * @returns {string} ID unique
+     */
+    generateUniqueId: function(prefix = 'element') {
+      return `${prefix}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    },
+    
+    /**
+     * Vérifie si un élément avec l'ID spécifié existe déjà
+     * @param {string} id - ID à vérifier
+     * @returns {boolean} True si l'élément existe
+     */
+    elementExists: function(id) {
+      return document.getElementById(id) !== null;
+    },
+    
+    /**
+     * Vérifie et signale tous les IDs dupliqués dans le document
+     * @returns {Array} Liste des IDs dupliqués trouvés
+     */
+    checkForDuplicateIds: function() {
+      const allElements = document.querySelectorAll('[id]');
+      const idMap = new Map();
+      const duplicates = [];
+      
+      allElements.forEach(element => {
+        const id = element.id;
+        if (idMap.has(id)) {
+          idMap.get(id).push(element);
+          if (idMap.get(id).length === 2) {
+            // Premier doublon détecté
+            duplicates.push(id);
+          }
+        } else {
+          idMap.set(id, [element]);
+        }
+      });
+      
+      if (duplicates.length > 0) {
+        console.warn('IDs dupliqués détectés:', duplicates);
+        duplicates.forEach(id => {
+          console.warn(`ID "${id}" trouvé ${idMap.get(id).length} fois:`, idMap.get(id));
+        });
+      }
+      
+      return duplicates;
+    }
+  };
+  
+  /**
    * Utilitaires pour le formatage des dates et les calculs temporels
    */
   const dateUtils = {
@@ -811,6 +892,7 @@ const NaturalisationUtils = (() => {
     storage,
     notifications,
     cache,
+    domUtils,
     dateUtils,
     statusUtils,
     

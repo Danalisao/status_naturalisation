@@ -1,11 +1,10 @@
 {
   "manifest_version": 3,
   "name": "Statut API du Dossier Naturalisation",
-  "version": "2.0.7",
-  "description": "Statut API du Dossier Naturalisation",
-  "browser_specific_settings": {
+  "version": "2.0.8",
+  "description": "Statut API du Dossier Naturalisation",  "browser_specific_settings": {
     "gecko": {
-      "id": "statut-naturalisation@extension.fr",
+      "id": "statut-naturalisation-extension@kamal.fr",
       "strict_min_version": "109.0"
     }
   },
