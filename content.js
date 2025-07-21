@@ -535,143 +535,60 @@
           const date = formatDate(entry.detectedAt);
           const timeAgo = daysAgo(entry.date);
           
-          // Déterminer si c'est le dernier item pour le style
-          const isLast = index === 0;
-          const isFirst = index === importantEntries.length - 1;
+          // Créer l'élément principal avec les nouvelles classes CSS
+          const historyItem = document.createElement('div');
+          historyItem.className = 'history-item';
           
-          // Créer l'élément principal
-          const timelineItem = document.createElement('div');
-          timelineItem.className = `timeline-item ${isLast ? 'latest' : ''} ${isFirst ? 'first' : ''}`;
+          // Créer le contenu de l'historique
+          const historyContent = document.createElement('div');
+          historyContent.className = 'history-item-content';
           
-          // Style spécifique pour le dernier élément (le plus récent)
-          const itemStyle = isLast ? 'border-left: 2px solid #5d9cec;' : '';
-          const iconBgColor = isLast ? '#5d9cec' : 'rgba(150,150,150,0.3)';
-          const iconColor = isLast ? 'white' : '#999';
-          
-          timelineItem.style.cssText = `position: relative; margin-bottom: 20px; padding-bottom: 16px; ${itemStyle}`;
-          
-          // Créer le point de la timeline
-          const timelinePoint = document.createElement('div');
-          timelinePoint.className = 'timeline-point';
-          timelinePoint.style.cssText = `position: absolute; left: -44px; width: 32px; height: 32px; 
-               border-radius: 50%; background-color: ${iconBgColor}; color: ${iconColor}; display: flex; align-items: center; justify-content: center; 
-               box-shadow: 0 4px 12px rgba(0,0,0,${prefersDarkMode ? '0.3' : '0.15'}), 0 0 0 3px ${prefersDarkMode ? 'rgba(20,25,40,0.8)' : 'rgba(255,255,255,0.9)'}; 
-               border: 2px solid ${isLast ? (prefersDarkMode ? '#5d9cec' : '#3b82f6') : (prefersDarkMode ? '#444' : '#e2e8f0')}; z-index: 2;`;
-          
-          const iconSpan = document.createElement('span');
-          iconSpan.className = statusClass;
-          iconSpan.style.cssText = 'font-size: 15px; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.3));';
-          iconSpan.textContent = statusIcon;
-          timelinePoint.appendChild(iconSpan);
-          
-          // Créer le contenu de la timeline
-          const timelineContent = document.createElement('div');
-          timelineContent.className = 'timeline-content';
-          timelineContent.style.cssText = `background: ${prefersDarkMode ? 
-            'linear-gradient(135deg, rgba(30, 35, 50, 0.95) 0%, rgba(40, 45, 65, 0.95) 100%)' : 
-            'linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.98) 100%)'}; 
-               backdrop-filter: blur(12px); border-radius: 12px; padding: 18px; margin-left: 8px;
-               box-shadow: 0 3px 16px rgba(0,0,0,${prefersDarkMode ? '0.2' : '0.06'}), 
-                          0 1px 2px rgba(0,0,0,${prefersDarkMode ? '0.1' : '0.03'}); 
-               border: 1px solid ${prefersDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)'};
-               position: relative;`;
-          
-          // Créer l'en-tête
-          const timelineHeader = document.createElement('div');
-          timelineHeader.className = 'timeline-header';
-          timelineHeader.style.cssText = `display: flex; justify-content: space-between; align-items: flex-start; 
-                margin-bottom: 12px; border-bottom: 1px solid ${prefersDarkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)'}; 
-                padding-bottom: 10px;`;
-          
-          const titleH4 = document.createElement('h4');
-          titleH4.style.cssText = `margin: 0; color: ${prefersDarkMode ? '#ffffff' : '#1e293b'}; font-size: 15px; 
-                font-weight: 600; text-shadow: ${prefersDarkMode ? '0 1px 2px rgba(0,0,0,0.5)' : '0 1px 2px rgba(255,255,255,0.8)'}; 
-                line-height: 1.4; flex: 1; min-width: 0; word-wrap: break-word; letter-spacing: 0.2px;
-                font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;`;
-          titleH4.textContent = entry.status;
-          
-          const timeBadge = document.createElement('span');
-          timeBadge.className = 'timeline-time-badge';
-          timeBadge.style.cssText = `font-size: 11px; padding: 5px 12px; 
-                background: ${prefersDarkMode ? 
-                  'linear-gradient(135deg, rgba(59, 130, 246, 0.25) 0%, rgba(99, 139, 218, 0.25) 100%)' : 
-                  'linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(99, 139, 218, 0.1) 100%)'}; 
-                color: ${prefersDarkMode ? '#79b9ff' : '#1a5099'}; border-radius: 12px; font-weight: 600;
-                border: 1px solid ${prefersDarkMode ? 'rgba(59, 130, 246, 0.3)' : 'rgba(59, 130, 246, 0.2)'};
-                white-space: nowrap; margin-left: 12px; flex-shrink: 0;
-                text-shadow: ${prefersDarkMode ? '0 1px 2px rgba(0,0,0,0.3)' : '0 1px 2px rgba(255,255,255,0.8)'};
-                box-shadow: 0 2px 6px rgba(59, 130, 246, ${prefersDarkMode ? '0.15' : '0.08'});`;
-          timeBadge.textContent = timeAgo;
-          
-          timelineHeader.appendChild(titleH4);
-          timelineHeader.appendChild(timeBadge);
+          // Créer le titre
+          const historyTitle = document.createElement('div');
+          historyTitle.className = 'history-item-title';
+          historyTitle.textContent = entry.status;
           
           // Créer la date
-          const timelineDate = document.createElement('div');
-          timelineDate.className = 'timeline-date';
-          timelineDate.style.cssText = `font-size: 12px; color: ${prefersDarkMode ? '#94a3b8' : '#64748b'}; 
-                margin-bottom: 6px; display: flex; align-items: center; font-weight: 500;`;
+          const historyDate = document.createElement('div');
+          historyDate.className = 'history-item-date';
+          historyDate.textContent = `Détecté le ${date}`;
           
-          const dateIcon = document.createElement('span');
-          dateIcon.style.cssText = 'margin-right: 6px; opacity: 0.8; font-size: 11px;';
-          dateIcon.textContent = '📅';
-          
-          const dateText = document.createElement('span');
-          dateText.textContent = `Détecté le ${date}`;
-          
-          timelineDate.appendChild(dateIcon);
-          timelineDate.appendChild(dateText);
-          
-          // Assembler le contenu
-          timelineContent.appendChild(timelineHeader);
-          timelineContent.appendChild(timelineDate);
+          // Assembler le contenu principal
+          historyContent.appendChild(historyTitle);
+          historyContent.appendChild(historyDate);
           
           // Ajouter l'information sur le statut précédent si disponible
           if (entry.previousStatus) {
-            const prevIcon = entry.previousStatusCode ? 
-              utils.statusUtils.getStatusIcon(entry.previousStatusCode.toLowerCase()) : '🗓️';
+            const historyPrevious = document.createElement('div');
+            historyPrevious.className = 'history-item-previous';
             
-            const timelinePrevious = document.createElement('div');
-            timelinePrevious.className = 'timeline-previous';
-            timelinePrevious.style.cssText = `font-size: 12px; margin-top: 12px; padding: 12px; 
-                 background: ${prefersDarkMode ? 
-                   'linear-gradient(135deg, rgba(20, 25, 35, 0.8) 0%, rgba(30, 35, 45, 0.8) 100%)' : 
-                   'linear-gradient(135deg, rgba(248, 250, 252, 0.9) 0%, rgba(241, 245, 249, 0.9) 100%)'}; 
-                 border-radius: 12px; 
-                 border-left: 3px solid ${prefersDarkMode ? 'rgba(156, 163, 175, 0.3)' : 'rgba(156, 163, 175, 0.4)'};
-                 box-shadow: 0 2px 8px rgba(0,0,0,${prefersDarkMode ? '0.15' : '0.04'}),
-                            inset 0 1px 0 rgba(255,255,255,${prefersDarkMode ? '0.05' : '0.7'});
-                 border: 1px solid ${prefersDarkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)'};
-                 backdrop-filter: blur(6px);`;
+            const previousTitle = document.createElement('div');
+            previousTitle.className = 'history-item-previous-title';
+            previousTitle.textContent = 'STATUT PRÉCÉDENT';
             
-            const prevHeader = document.createElement('div');
-            prevHeader.style.cssText = 'display: flex; align-items: center; margin-bottom: 6px;';
+            const previousStatus = document.createElement('div');
+            previousStatus.className = 'history-item-previous-status';
+            previousStatus.textContent = entry.previousStatus;
             
-            const prevIconSpan = document.createElement('span');
-            prevIconSpan.style.cssText = 'display: inline-block; margin-right: 6px; opacity: 0.8; font-size: 12px; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.2));';
-            prevIconSpan.textContent = prevIcon;
-            
-            const prevLabel = document.createElement('span');
-            prevLabel.style.cssText = `font-weight: 600; color: ${prefersDarkMode ? '#9ca3af' : '#6b7280'}; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;`;
-            prevLabel.textContent = 'Statut précédent';
-            
-            const prevStatusDiv = document.createElement('div');
-            prevStatusDiv.style.cssText = `display: block; margin-top: 6px; padding-left: 18px; 
-                 color: ${prefersDarkMode ? '#d1d5db' : '#374151'}; font-weight: 500; font-size: 12px;
-                 line-height: 1.4; word-wrap: break-word;`;
-            prevStatusDiv.textContent = entry.previousStatus;
-            
-            prevHeader.appendChild(prevIconSpan);
-            prevHeader.appendChild(prevLabel);
-            timelinePrevious.appendChild(prevHeader);
-            timelinePrevious.appendChild(prevStatusDiv);
-            timelineContent.appendChild(timelinePrevious);
+            historyPrevious.appendChild(previousTitle);
+            historyPrevious.appendChild(previousStatus);
+            historyContent.appendChild(historyPrevious);
           }
           
-          // Assembler tout
-          timelineItem.appendChild(timelinePoint);
-          timelineItem.appendChild(timelineContent);
-          container.appendChild(timelineItem);
+              // Assembler l'élément
+    historyItem.appendChild(historyContent);
+    container.appendChild(historyItem);
+    
+    // Ajouter des particules flottantes pour l'effet "waouh"
+    if (index === 0) { // Seulement pour le premier élément
+      for (let i = 0; i < 5; i++) {
+        const particle = document.createElement('div');
+        particle.className = 'particle';
+        particle.style.left = Math.random() * 100 + '%';
+        particle.style.animationDelay = Math.random() * 3 + 's';
+        historyItem.appendChild(particle);
+      }
+    }
         });
         
         debug.endTimer('generateHistoryElements');
@@ -728,47 +645,61 @@
     newElement.className = `itemFrise active ng-star-inserted naturalisation-status ${prefersDarkMode ? CONFIG.UI.THEME_DARK_CLASS : ''}`;
     newElement.id = CONFIG.UI.CONTAINER_ID;
     
-    // Style de base pour le glassmorphism
-    const glassBg = prefersDarkMode ? 'rgba(25, 25, 35, 0.7)' : 'rgba(255, 255, 255, 0.7)';
-    const glassBorder = prefersDarkMode ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid rgba(255, 255, 255, 0.5)';
-    const glassTextColor = prefersDarkMode ? '#e1e1e1' : '#080000';
-    const glassAccentColor = prefersDarkMode ? '#5d9cec' : '#255a99'; 
-    const glassAccentSecondary = prefersDarkMode ? '#ec5d5d' : '#bf2626';
+    // Style de base pour le glassmorphism moderne
+    const glassBg = prefersDarkMode ? 'rgba(15, 23, 42, 0.95)' : 'rgba(255, 255, 255, 0.95)';
+    const glassBorder = prefersDarkMode ? '1px solid rgba(51, 65, 85, 0.8)' : '1px solid rgba(226, 232, 240, 0.8)';
+    const glassTextColor = prefersDarkMode ? '#f8fafc' : '#0f172a';
+    const glassAccentColor = prefersDarkMode ? '#3b82f6' : '#3b82f6'; 
+    const glassAccentSecondary = prefersDarkMode ? '#ef4444' : '#ef4444';
     
     newElement.setAttribute(
       "style",
       `
       background: ${glassBg};
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      -moz-backdrop-filter: blur(10px);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      -moz-backdrop-filter: blur(20px);
       border: ${glassBorder};
-      border-radius: 16px;
-      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
-      -moz-box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
-      -webkit-box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
+      border-radius: 1rem;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+      -moz-box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+      -webkit-box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-family: 'Segoe UI', Roboto, Arial, sans-serif;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       font-size: 16px;
       color: ${glassTextColor};
       flex-wrap: wrap;
       overflow: hidden;
-      transition: all 0.3s ease;
-      margin: 15px 0;
-      max-width: 280px;
-      width: 280px;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      margin: 1rem 0;
+      max-width: 320px;
+      width: 320px;
       min-height: auto;
       height: auto;
+      position: relative;
     `
     );
+    
+    // Ajouter un effet de brillance subtile au survol
+    newElement.addEventListener('mouseenter', function() {
+      this.style.transform = 'translateY(-4px)';
+      this.style.boxShadow = '0 25px 50px -12px rgba(0, 0, 0, 0.25)';
+      this.style.borderColor = prefersDarkMode ? 'rgba(59, 130, 246, 0.5)' : 'rgba(59, 130, 246, 0.3)';
+    });
+    
+    newElement.addEventListener('mouseleave', function() {
+      this.style.transform = 'translateY(0)';
+      this.style.boxShadow = '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)';
+      this.style.borderColor = glassBorder;
+    });
     
     // Récupérer l'icône et la classe CSS pour le statut
     const statusIcon = utils.statusUtils.getStatusIcon(dossierStatusCode.toLowerCase()) || '⏳';
     const statusClass = utils.statusUtils.getStatusClass(dossierStatusCode.toLowerCase()) || '';
     
-    // Générer le contenu HTML avec interface moderne et timeline - version corrigée
+    // Générer le contenu HTML avec interface moderne et timeline - version modernisée
     const mainContainer = document.createElement('div');
     if (dynamicClass) mainContainer.setAttribute(dynamicClass, '');
     mainContainer.classList.add('itemFriseContent', 'naturalisation-content');
@@ -777,8 +708,8 @@
     mainContainer.style.boxSizing = 'border-box';
     mainContainer.style.overflowX = 'hidden';
     mainContainer.style.margin = '0';
-    mainContainer.style.padding = '2px 12px';
-    mainContainer.style.transform = 'translateY(-6px)'; // Remonte encore plus le composant
+    mainContainer.style.padding = '1.5rem';
+    mainContainer.style.transform = 'translateY(-6px)';
     
     const topContainer = document.createElement('div');
     topContainer.style.display = 'flex';
@@ -789,7 +720,7 @@
     topContainer.style.boxSizing = 'border-box';
     topContainer.style.margin = '0';
     topContainer.style.padding = '0';
-    topContainer.style.gap = '4px';
+    topContainer.style.gap = '0.75rem';
     
     const statusCard = document.createElement('div');
     statusCard.style.display = 'flex';
@@ -797,21 +728,21 @@
     statusCard.style.alignItems = 'center';
     statusCard.style.justifyContent = 'flex-start';
     statusCard.style.background = prefersDarkMode ? 
-      'linear-gradient(135deg, rgba(30, 35, 50, 0.96) 0%, rgba(40, 45, 60, 0.96) 100%)' : 
-      'linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(250, 252, 255, 0.98) 100%)';
-    statusCard.style.borderRadius = '12px';
-    statusCard.style.padding = '10px 12px';
-    statusCard.style.minHeight = '42px';
+      'linear-gradient(135deg, rgba(30, 41, 59, 0.98) 0%, rgba(51, 65, 85, 0.98) 100%)' : 
+      'linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.98) 100%)';
+    statusCard.style.borderRadius = '0.75rem';
+    statusCard.style.padding = '1rem 1.25rem';
+    statusCard.style.minHeight = '48px';
     statusCard.style.width = '100%';
     statusCard.style.maxWidth = '100%';
     statusCard.style.minWidth = 'auto';
     statusCard.style.boxSizing = 'border-box';
     statusCard.style.boxShadow = prefersDarkMode ? 
-      '0 3px 18px rgba(0,0,0,0.35), 0 1px 6px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.06)' : 
-      '0 3px 18px rgba(0,0,0,0.06), 0 1px 8px rgba(0,0,0,0.03), inset 0 1px 0 rgba(255,255,255,0.8)';
+      '0 10px 15px -3px rgba(0,0,0,0.3), 0 4px 6px -2px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.06)' : 
+      '0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05), inset 0 1px 0 rgba(255,255,255,0.8)';
     statusCard.style.border = prefersDarkMode ? 
-      '0.5px solid rgba(99, 139, 218, 0.15)' : 
-      '1px solid rgba(59, 130, 246, 0.2)';
+      '1px solid rgba(59, 130, 246, 0.2)' : 
+      '1px solid rgba(59, 130, 246, 0.15)';
     statusCard.style.textAlign = 'left';
     statusCard.style.backdropFilter = 'blur(10px)';
     statusCard.style.webkitBackdropFilter = 'blur(10px)';
@@ -838,28 +769,43 @@
     iconWrapper.style.display = 'flex';
     iconWrapper.style.alignItems = 'center';
     iconWrapper.style.justifyContent = 'center';
-    iconWrapper.style.minWidth = '36px';
-    iconWrapper.style.minHeight = '36px';
+    iconWrapper.style.minWidth = '40px';
+    iconWrapper.style.minHeight = '40px';
     iconWrapper.style.borderRadius = '50%';
     iconWrapper.style.background = prefersDarkMode ? 
-      'linear-gradient(135deg, rgba(99, 139, 218, 0.5) 0%, rgba(59, 130, 246, 0.5) 100%)' : 
+      'linear-gradient(135deg, rgba(59, 130, 246, 0.3) 0%, rgba(99, 139, 218, 0.3) 100%)' : 
       'linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(99, 139, 218, 0.15) 100%)';
-    iconWrapper.style.margin = '0 10px 0 0';
+    iconWrapper.style.margin = '0 0.75rem 0 0';
     iconWrapper.style.boxShadow = prefersDarkMode ? 
-      '0 3px 10px rgba(59, 130, 246, 0.25), inset 0 1px 0 rgba(255,255,255,0.08), 0 0 15px rgba(59, 130, 246, 0.08)' : 
-      '0 3px 10px rgba(59, 130, 246, 0.12), inset 0 1px 0 rgba(255,255,255,0.3), 0 0 15px rgba(59, 130, 246, 0.04)';
+      '0 4px 6px -1px rgba(59, 130, 246, 0.25), inset 0 1px 0 rgba(255,255,255,0.08), 0 0 15px rgba(59, 130, 246, 0.08)' : 
+      '0 4px 6px -1px rgba(59, 130, 246, 0.12), inset 0 1px 0 rgba(255,255,255,0.3), 0 0 15px rgba(59, 130, 246, 0.04)';
     iconWrapper.style.border = prefersDarkMode ? 
-      '1px solid rgba(99, 139, 218, 0.2)' : 
+      '2px solid rgba(59, 130, 246, 0.3)' : 
       '2px solid rgba(59, 130, 246, 0.2)';
     iconWrapper.style.flexShrink = '0';
     iconWrapper.style.transition = 'all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1)';
     iconWrapper.style.position = 'relative';
     iconWrapper.style.zIndex = '2';
     
+    // Effet de survol pour l'icône
+    iconWrapper.addEventListener('mouseenter', function() {
+      this.style.transform = 'scale(1.05)';
+      this.style.boxShadow = prefersDarkMode ? 
+        '0 8px 25px -3px rgba(59, 130, 246, 0.4), inset 0 1px 0 rgba(255,255,255,0.1)' : 
+        '0 8px 25px -3px rgba(59, 130, 246, 0.2), inset 0 1px 0 rgba(255,255,255,0.5)';
+    });
+    
+    iconWrapper.addEventListener('mouseleave', function() {
+      this.style.transform = 'scale(1)';
+      this.style.boxShadow = prefersDarkMode ? 
+        '0 4px 6px -1px rgba(59, 130, 246, 0.25), inset 0 1px 0 rgba(255,255,255,0.08), 0 0 15px rgba(59, 130, 246, 0.08)' : 
+        '0 4px 6px -1px rgba(59, 130, 246, 0.12), inset 0 1px 0 rgba(255,255,255,0.3), 0 0 15px rgba(59, 130, 246, 0.04)';
+    });
+    
     const iconSpan = document.createElement('span');
     if (dynamicClass) iconSpan.className = dynamicClass;
     iconSpan.classList.add('status-icon', statusClass);
-    iconSpan.style.fontSize = '22px';
+    iconSpan.style.fontSize = '20px';
     iconSpan.style.textShadow = '0 2px 4px rgba(0,0,0,0.3)';
     iconSpan.style.filter = 'drop-shadow(0 0 6px rgba(59, 130, 246, 0.4))';
     iconSpan.style.transition = 'all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1)';
@@ -873,7 +819,7 @@
     contentBox.style.display = 'flex';
     contentBox.style.flexDirection = 'column';
     contentBox.style.flex = '1';
-    contentBox.style.minWidth = '0'; // Important pour le flex-shrink
+    contentBox.style.minWidth = '0';
     contentBox.style.alignItems = 'flex-start';
     contentBox.style.textAlign = 'left';
     contentBox.style.overflow = 'hidden';
@@ -882,20 +828,20 @@
     
     const statusTitle = document.createElement('h2');
     statusTitle.style.margin = '0';
-    statusTitle.style.fontSize = '15px';
+    statusTitle.style.fontSize = '1rem';
     statusTitle.style.lineHeight = '1.4';
-    statusTitle.style.fontWeight = '700';
+    statusTitle.style.fontWeight = '600';
     statusTitle.style.color = prefersDarkMode ? '#ffffff' : '#1e293b';
     statusTitle.style.textShadow = prefersDarkMode ? 
       '0 2px 4px rgba(0,0,0,0.5)' : 
       '0 1px 2px rgba(255,255,255,0.8)';
-    statusTitle.style.letterSpacing = '0.3px';
+    statusTitle.style.letterSpacing = '-0.025em';
     statusTitle.style.wordWrap = 'break-word';
     statusTitle.style.overflowWrap = 'break-word';
     statusTitle.style.textAlign = 'left';
-    statusTitle.style.marginBottom = '4px';
+    statusTitle.style.marginBottom = '0.5rem';
     statusTitle.style.whiteSpace = 'normal';
-    statusTitle.style.fontFamily = "'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif";
+    statusTitle.style.fontFamily = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
     statusTitle.style.position = 'relative';
     statusTitle.style.zIndex = '2';
     statusTitle.style.maxWidth = '100%';
@@ -909,32 +855,32 @@
     const timeBadge = document.createElement('div');
     timeBadge.style.display = 'inline-flex';
     timeBadge.style.alignItems = 'center';
-    timeBadge.style.marginTop = '4px';
-    timeBadge.style.padding = '4px 10px';
+    timeBadge.style.marginTop = '0.25rem';
+    timeBadge.style.padding = '0.25rem 0.75rem';
     timeBadge.style.background = prefersDarkMode ? 
       'linear-gradient(135deg, rgba(239, 68, 68, 0.8) 0%, rgba(220, 38, 38, 0.8) 100%)' : 
       'linear-gradient(135deg, rgba(254, 226, 226, 0.9) 0%, rgba(252, 165, 165, 0.9) 100%)';
     timeBadge.style.color = prefersDarkMode ? '#ffffff' : '#991b1b';
-    timeBadge.style.borderRadius = '16px';
-    timeBadge.style.fontWeight = '700';
-    timeBadge.style.fontSize = '11px';
+    timeBadge.style.borderRadius = '9999px';
+    timeBadge.style.fontWeight = '600';
+    timeBadge.style.fontSize = '0.75rem';
     timeBadge.style.boxShadow = prefersDarkMode ? 
-      '0 3px 8px rgba(239, 68, 68, 0.4), inset 0 1px 0 rgba(255,255,255,0.15)' : 
-      '0 3px 8px rgba(220, 38, 38, 0.2), inset 0 1px 0 rgba(255,255,255,0.7)';
+      '0 4px 6px -1px rgba(239, 68, 68, 0.4), inset 0 1px 0 rgba(255,255,255,0.15)' : 
+      '0 4px 6px -1px rgba(220, 38, 38, 0.2), inset 0 1px 0 rgba(255,255,255,0.7)';
     timeBadge.style.border = prefersDarkMode ? 
       '1px solid rgba(239, 68, 68, 0.5)' : 
       '1px solid rgba(220, 38, 38, 0.3)';
-    timeBadge.style.letterSpacing = '0.3px';
+    timeBadge.style.letterSpacing = '0.025em';
     timeBadge.style.textAlign = 'center';
     timeBadge.style.whiteSpace = 'nowrap';
     timeBadge.style.backdropFilter = 'blur(6px)';
     timeBadge.style.transition = 'all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1)';
     timeBadge.style.textShadow = prefersDarkMode ? '0 1px 2px rgba(0,0,0,0.4)' : '0 1px 2px rgba(255,255,255,0.6)';
-    timeBadge.style.fontFamily = "'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif";
+    timeBadge.style.fontFamily = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
     
     const timeIcon = document.createElement('span');
-    timeIcon.style.marginRight = '4px';
-    timeIcon.style.fontSize = '10px';
+    timeIcon.style.marginRight = '0.25rem';
+    timeIcon.style.fontSize = '0.75rem';
     timeIcon.style.filter = 'drop-shadow(0 0 3px rgba(239, 68, 68, 0.6))';
     timeIcon.style.transform = 'scale(1.1)';
     timeIcon.textContent = '⏳';
@@ -946,44 +892,67 @@
     contentBox.appendChild(timeBadge);
     statusCard.appendChild(contentBox);
     
-    // Ajouter le bouton historique directement dans la statusCard à droite
+    // Ajouter le bouton historique avec design moderne
     const historyBtn = createElementWithUniqueId('button', 'toggle-history-btn');
     historyBtn.style.cursor = 'pointer';
-    historyBtn.style.padding = '8px 10px';
+    historyBtn.style.padding = '0.5rem 0.75rem';
     historyBtn.style.background = prefersDarkMode ? 
       'linear-gradient(135deg, rgba(59, 130, 246, 0.9) 0%, rgba(37, 99, 235, 0.9) 100%)' : 
       'linear-gradient(135deg, rgba(59, 130, 246, 1) 0%, rgba(37, 99, 235, 1) 100%)';
     historyBtn.style.color = 'white';
     historyBtn.style.border = 'none';
-    historyBtn.style.borderRadius = '12px';
-    historyBtn.style.fontSize = '11px';
+    historyBtn.style.borderRadius = '9999px';
+    historyBtn.style.fontSize = '0.75rem';
     historyBtn.style.transition = 'all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1)';
     historyBtn.style.display = 'flex';
     historyBtn.style.alignItems = 'center';
     historyBtn.style.justifyContent = 'center';
     historyBtn.style.boxShadow = prefersDarkMode ? 
-      '0 4px 12px rgba(59, 130, 246, 0.4), inset 0 1px 0 rgba(255,255,255,0.2)' : 
-      '0 4px 12px rgba(59, 130, 246, 0.3), inset 0 1px 0 rgba(255,255,255,0.4)';
-    historyBtn.style.fontWeight = '700';
+      '0 4px 6px -1px rgba(59, 130, 246, 0.4), inset 0 1px 0 rgba(255,255,255,0.2)' : 
+      '0 4px 6px -1px rgba(59, 130, 246, 0.3), inset 0 1px 0 rgba(255,255,255,0.4)';
+    historyBtn.style.fontWeight = '600';
     historyBtn.style.outline = 'none';
     historyBtn.style.whiteSpace = 'nowrap';
     historyBtn.style.height = '32px';
     historyBtn.style.minWidth = '65px';
     historyBtn.style.maxWidth = '80px';
-    historyBtn.style.marginLeft = '10px';
+    historyBtn.style.marginLeft = '0.75rem';
     historyBtn.style.flexShrink = '0';
     historyBtn.style.textShadow = '0 1px 3px rgba(0,0,0,0.4)';
-    historyBtn.style.letterSpacing = '0.3px';
+    historyBtn.style.letterSpacing = '0.025em';
     historyBtn.style.position = 'relative';
     historyBtn.style.overflow = 'hidden';
-    historyBtn.style.fontFamily = "'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif";
+    historyBtn.style.fontFamily = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
     historyBtn.style.transform = 'scale(1)';
     historyBtn.style.zIndex = '2';
     historyBtn.style.boxSizing = 'border-box';
     
+    // Effet de survol pour le bouton
+    historyBtn.addEventListener('mouseenter', function() {
+      this.style.transform = 'translateY(-2px) scale(1.02)';
+      this.style.boxShadow = prefersDarkMode ? 
+        '0 8px 25px -3px rgba(59, 130, 246, 0.5), inset 0 1px 0 rgba(255,255,255,0.3)' : 
+        '0 8px 25px -3px rgba(59, 130, 246, 0.4), inset 0 1px 0 rgba(255,255,255,0.6)';
+    });
+    
+    historyBtn.addEventListener('mouseleave', function() {
+      this.style.transform = 'translateY(0) scale(1)';
+      this.style.boxShadow = prefersDarkMode ? 
+        '0 4px 6px -1px rgba(59, 130, 246, 0.4), inset 0 1px 0 rgba(255,255,255,0.2)' : 
+        '0 4px 6px -1px rgba(59, 130, 246, 0.3), inset 0 1px 0 rgba(255,255,255,0.4)';
+    });
+    
+    historyBtn.addEventListener('mousedown', function() {
+      this.style.transform = 'translateY(0) scale(0.98)';
+    });
+    
+    historyBtn.addEventListener('mouseup', function() {
+      this.style.transform = 'translateY(-2px) scale(1.02)';
+    });
+    
     const btnIcon = document.createElement('span');
-    btnIcon.style.marginRight = '4px';
-    btnIcon.style.fontSize = '11px';
+    btnIcon.style.marginRight = '0.25rem';
+    btnIcon.style.fontSize = '0.75rem';
     btnIcon.style.filter = 'drop-shadow(0 0 4px rgba(255,255,255,0.6))';
     btnIcon.style.transition = 'all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1)';
     btnIcon.style.transform = 'scale(1)';
@@ -1005,24 +974,24 @@
     topContainer.appendChild(statusCard);
     mainContainer.appendChild(topContainer);
     
-    // Container pour l'historique (caché initialement)
+    // Container pour l'historique avec design moderne
     const historyContainer = createElementWithUniqueId('div', 'status-history-container');
     historyContainer.style.display = 'none';
     historyContainer.style.width = '100%';
     historyContainer.style.opacity = '0';
     historyContainer.style.transition = 'opacity 0.5s ease';
-    historyContainer.style.marginTop = '12px';
+    historyContainer.style.marginTop = '0.75rem';
     historyContainer.style.background = prefersDarkMode ? 
-      'linear-gradient(135deg, rgba(20, 25, 40, 0.98) 0%, rgba(35, 45, 65, 0.98) 100%)' : 
+      'linear-gradient(135deg, rgba(30, 41, 59, 0.98) 0%, rgba(51, 65, 85, 0.98) 100%)' : 
       'linear-gradient(135deg, rgba(248, 250, 252, 0.98) 0%, rgba(241, 245, 249, 0.98) 100%)';
-    historyContainer.style.borderRadius = '12px';
-    historyContainer.style.padding = '16px';
+    historyContainer.style.borderRadius = '0.75rem';
+    historyContainer.style.padding = '1.25rem';
     historyContainer.style.boxShadow = prefersDarkMode ? 
-      '0 8px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255,255,255,0.05)' : 
-      '0 8px 32px rgba(99, 139, 218, 0.08), inset 0 1px 0 rgba(255,255,255,0.8)';
+      '0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.15), inset 0 1px 0 rgba(255,255,255,0.05)' : 
+      '0 10px 15px -3px rgba(99, 139, 218, 0.08), 0 4px 6px -2px rgba(99, 139, 218, 0.04), inset 0 1px 0 rgba(255,255,255,0.8)';
     historyContainer.style.border = prefersDarkMode ? 
-      '1px solid rgba(99, 139, 218, 0.15)' : 
-      '1px solid rgba(59, 130, 246, 0.2)';
+      '1px solid rgba(59, 130, 246, 0.2)' : 
+      '1px solid rgba(59, 130, 246, 0.15)';
     historyContainer.style.backdropFilter = 'blur(10px)';
     historyContainer.style.webkitBackdropFilter = 'blur(10px)';
     historyContainer.style.boxSizing = 'border-box';
@@ -1032,44 +1001,44 @@
     timelineHeader.style.display = 'flex';
     timelineHeader.style.justifyContent = 'space-between';
     timelineHeader.style.alignItems = 'center';
-    timelineHeader.style.marginBottom = '16px';
+    timelineHeader.style.marginBottom = '1rem';
     timelineHeader.style.borderBottom = prefersDarkMode ? 
       '1px solid rgba(255,255,255,0.1)' : 
       '1px solid rgba(0,0,0,0.08)';
-    timelineHeader.style.paddingBottom = '12px';
+    timelineHeader.style.paddingBottom = '0.75rem';
     
     const timelineTitle = document.createElement('h3');
     timelineTitle.style.margin = '0';
     timelineTitle.style.color = prefersDarkMode ? '#ffffff' : '#1e293b';
     timelineTitle.style.fontWeight = '600';
-    timelineTitle.style.fontSize = '16px';
+    timelineTitle.style.fontSize = '1rem';
     timelineTitle.style.textShadow = prefersDarkMode ? 
       '0 2px 4px rgba(0,0,0,0.5)' : 
       '0 1px 2px rgba(255,255,255,0.8)';
-    timelineTitle.style.fontFamily = "'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif";
+    timelineTitle.style.fontFamily = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
     timelineTitle.textContent = 'Historique des statuts';
     
     const timelineCounter = createElementWithUniqueId('span', 'timeline-counter', 'timeline-counter');
-    timelineCounter.style.fontSize = '12px';
+    timelineCounter.style.fontSize = '0.75rem';
     timelineCounter.style.color = prefersDarkMode ? '#ffffff' : '#1e293b';
     timelineCounter.style.fontWeight = '600';
     timelineCounter.style.background = prefersDarkMode ? 
       'linear-gradient(135deg, rgba(59, 130, 246, 0.3) 0%, rgba(99, 139, 218, 0.3) 100%)' : 
       'linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(99, 139, 218, 0.15) 100%)';
-    timelineCounter.style.padding = '6px 12px';
-    timelineCounter.style.borderRadius = '14px';
+    timelineCounter.style.padding = '0.25rem 0.75rem';
+    timelineCounter.style.borderRadius = '9999px';
     timelineCounter.style.border = prefersDarkMode ? 
       '1px solid rgba(59, 130, 246, 0.4)' : 
       '1px solid rgba(59, 130, 246, 0.25)';
-    timelineCounter.style.fontFamily = "'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif";
+    timelineCounter.style.fontFamily = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
     timelineCounter.style.textShadow = prefersDarkMode ? 
       '0 1px 2px rgba(0,0,0,0.5)' : 
       '0 1px 2px rgba(255,255,255,0.8)';
-    timelineCounter.style.boxShadow = `0 3px 8px rgba(59, 130, 246, ${prefersDarkMode ? '0.2' : '0.1'}), 
+    timelineCounter.style.boxShadow = `0 4px 6px -1px rgba(59, 130, 246, ${prefersDarkMode ? '0.2' : '0.1'}), 
                                        inset 0 1px 0 rgba(255,255,255,${prefersDarkMode ? '0.1' : '0.5'})`;
     timelineCounter.style.backdropFilter = 'blur(8px)';
     timelineCounter.style.webkitBackdropFilter = 'blur(8px)';
-    timelineCounter.style.letterSpacing = '0.3px';
+    timelineCounter.style.letterSpacing = '0.025em';
     timelineCounter.style.transition = 'all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)';
     
     timelineHeader.appendChild(timelineTitle);
@@ -1079,7 +1048,7 @@
     const timelineDiv = createElementWithUniqueId('div', CONFIG.UI.TIMELINE_ID);
     timelineDiv.className = 'timeline';
     timelineDiv.style.position = 'relative';
-    timelineDiv.style.paddingLeft = '20px';
+    timelineDiv.style.paddingLeft = '2.5rem';
     timelineDiv.style.maxHeight = '280px';
     timelineDiv.style.overflowY = 'auto';
     timelineDiv.style.overflowX = 'hidden';

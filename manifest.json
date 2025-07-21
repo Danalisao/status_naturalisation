@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Statut API du Dossier Naturalisation",
-  "version": "2.0.8",
+  "version": "2.1.0",
   "description": "Statut API du Dossier Naturalisation",  "browser_specific_settings": {
     "gecko": {
       "id": "statut-naturalisation-extension@kamal.fr",
@@ -25,7 +25,7 @@
     "run_at": "document_end"
   }],
   "web_accessible_resources": [{
-    "resources": ["content.js", "utils.js", "debug.js", "crypto-js.min.js", "forge.min.js", "styles.css"],
+    "resources": ["content.js", "utils.js", "debug.js", "crypto-js.min.js", "forge.min.js", "styles.css", "icons-config.js"],
     "matches": ["https://administration-etrangers-en-france.interieur.gouv.fr/*"]
   }],
   "icons": {
